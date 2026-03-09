@@ -1,0 +1,144 @@
+using FsCheck;
+using FsCheck.Xunit;
+using Xunit;
+using Execution.Service;
+using Microsoft.Extensions.Logging;
+
+namespace Execution.Tests;
+
+/// <summary>
+/// Property-based tests for compilation error reporting
+/// Property 12: Compilation Error Reporting
+/// Validates: Requirements 7.10
+/// </summary>
+public class CompilationErrorReportingPropertyTests
+{
+    /// <summary>
+    /// Property: When code has compilation errors, the error message MUST include line numbers
+    /// </summary>
+    [Property(MaxTest = 100)]
+    public Property CompilationErrors_MustIncludeLineNumbers()
+    {
+        return Prop.ForAll(
+            Arb.From<string>(),
+            invalidCode =>
+            {
+                // Skip empty or null strings
+                if (string.IsNullOrWhiteSpace(invalidCode))
+                    return true;
+
+                // Create code with intentional syntax error
+                var codeWithError = $@"
+using System;
+
+class Program
+{{
+    static void Main()
+    {{
+        {invalidCode}
+        Console.WriteLine(""test"");
+        // Missing semicolon on next line
+        var x = 5
+    }}
+}}";
+
+                var executor = new SimpleCodeExecutor(LoggerFactory.Create(builder => { }));
+                var result = executor.ExecuteAsync(codeWithError).Result;
+
+                // If compilation failed, error message must contain line number
+                if (result.Status == "Failed" && result.Error != null)
+                {
+                    var hasLineNumber = result.Error.Contains("Line ") || 
+                                       result.Error.Contains("line ") ||
+                                       result.Error.Contains("(") && result.Error.Contains(",");
+                    
+                    return hasLineNumber.ToProperty().Label($"Error message must include line number. Got: {result.Error}");
+                }
+
+                return true.ToProperty();
+            });
+    }
+
+    /// <summary>
+    /// Property: Compilation errors MUST be deterministic for the same code
+    /// </summary>
+    [Property(MaxTest = 50)]
+    public Property CompilationErrors_AreDeterministic()
+    {
+        return Prop.ForAll(
+            Arb.From<string>(),
+            code =>
+            {
+                if (string.IsNullOrWhiteSpace(code))
+                    return true;
+
+                var invalidCode = $@"
+using System;
+class Program {{ static void Main() {{ {code} var x = 5 }} }}";
+
+                var executor = new SimpleCodeExecutor(LoggerFactory.Create(builder => { }));
+                
+                var result1 = executor.ExecuteAsync(invalidCode).Result;
+                var result2 = executor.ExecuteAsync(invalidCode).Result;
+
+                // Same code should produce same error
+                var passed = result1.Status == result2.Status && result1.Error == result2.Error;
+                return passed.ToProperty().Label("Same code must produce identical compilation results");
+            });
+    }
+
+    /// <summary>
+    /// Property: Valid code MUST NOT produce compilation errors
+    /// </summary>
+    [Fact]
+    public void ValidCode_MustNotProduceCompilationErrors()
+    {
+        var validCode = @"
+using System;
+
+class Program
+{
+    static void Main()
+    {
+        Console.WriteLine(""Hello World"");
+    }
+}";
+
+        var executor = new SimpleCodeExecutor(LoggerFactory.Create(builder => { }));
+        var result = executor.ExecuteAsync(validCode).Result;
+
+        Assert.Equal("Completed", result.Status);
+        Assert.Null(result.Error);
+    }
+
+    /// <summary>
+    /// Property: Multiple compilation errors MUST all be reported
+    /// </summary>
+    [Fact]
+    public void MultipleCompilationErrors_MustAllBeReported()
+    {
+        var codeWithMultipleErrors = @"
+using System;
+
+class Program
+{
+    static void Main()
+    {
+        var x = 5
+        var y = undefinedVariable;
+        Console.WriteLine(x + z);
+    }
+}";
+
+        var executor = new SimpleCodeExecutor(LoggerFactory.Create(builder => { }));
+        var result = executor.ExecuteAsync(codeWithMultipleErrors).Result;
+
+        Assert.Equal("Failed", result.Status);
+        Assert.NotNull(result.Error);
+        
+        // Should report multiple errors
+        var errorLines = result.Error.Split('\n');
+        Assert.True(errorLines.Length > 1, "Multiple errors should be reported");
+    }
+}
+

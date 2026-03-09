@@ -131,22 +131,33 @@ if (-not $SkipDocker -and -not $ServicesOnly) {
     
     # Verificar SQL Server
     Write-Info "Verificando SQL Server..."
-    $maxRetries = 30
+    $maxRetries = 60
     $retries = 0
+    $sqlReady = $false
+    
     while ($retries -lt $maxRetries) {
         try {
             $containerStatus = docker inspect aspnet-learning-sqlserver --format='{{.State.Running}}' 2>&1
             if ($containerStatus -eq "true") {
-                Write-Success "SQL Server está pronto"
-                break
+                # Container está rodando, agora verificar se SQL Server está aceitando conexões
+                $testConnection = docker exec aspnet-learning-sqlserver /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "P@ssw0rd!2026#SecurePlatform" -Q "SELECT 1" -C 2>&1
+                if ($LASTEXITCODE -eq 0) {
+                    Write-Success "SQL Server está pronto e aceitando conexões"
+                    $sqlReady = $true
+                    break
+                }
             }
         } catch {}
         $retries++
-        Start-Sleep -Seconds 1
+        if ($retries % 10 -eq 0) {
+            Write-Info "  Ainda aguardando SQL Server... ($retries/$maxRetries)"
+        }
+        Start-Sleep -Seconds 2
     }
     
-    if ($retries -eq $maxRetries) {
-        Write-Warning "SQL Server pode não estar pronto ainda"
+    if (-not $sqlReady) {
+        Write-Warning "SQL Server pode não estar pronto ainda. Os serviços podem falhar ao iniciar."
+        Write-Warning "Aguarde alguns segundos e execute '.\health-check.ps1' para verificar."
     }
 
     Write-Success "Docker containers prontos"
@@ -203,7 +214,10 @@ $services = @(
     @{Name="Challenge"; Path="src/Services/Challenge/Challenge.Service.csproj"; Port=5004; Url="http://localhost:5004"},
     @{Name="AITutor"; Path="src/Services/AITutor/AITutor.Service.csproj"; Port=5005; Url="http://localhost:5005"},
     @{Name="Execution"; Path="src/Services/Execution/Execution.Service.csproj"; Port=5006; Url="http://localhost:5006"},
-    @{Name="Worker"; Path="src/Services/Worker/Worker.Service.csproj"; Port=5007; Url="http://localhost:5007"}
+    @{Name="Worker"; Path="src/Services/Worker/Worker.Service.csproj"; Port=5007; Url="http://localhost:5007"},
+    @{Name="SqlExecutor"; Path="src/Services/SqlExecutor/SqlExecutor.Service.csproj"; Port=5008; Url="http://localhost:5008"},
+    @{Name="Notification"; Path="src/Services/Notification/Notification.Service.csproj"; Port=5009; Url="http://localhost:5009"},
+    @{Name="Analytics"; Path="src/Services/Analytics/Analytics.Service.csproj"; Port=5010; Url="http://localhost:5010"}
 )
 
 foreach ($service in $services) {
@@ -224,8 +238,8 @@ Write-Success "Todos os serviços backend foram iniciados"
 Write-Step "5.1. Iniciando frontend Next.js"
 
 Write-Info "Iniciando frontend Next.js na porta 3000..."
-# Usar node diretamente para evitar problemas com npm
-$frontendProcess = Start-Process powershell -ArgumentList "-Command", "cd '$PWD'; node frontend/node_modules/next/dist/bin/next dev frontend" -WindowStyle Minimized -PassThru
+# Usar npm run dev para iniciar o frontend corretamente
+$frontendProcess = Start-Process powershell -ArgumentList "-Command", "cd '$PWD/frontend'; npm run dev" -WindowStyle Minimized -PassThru
 
 # Salvar PID do frontend
 Add-Content -Path ".pids" -Value "$($frontendProcess.Id)"
@@ -234,8 +248,10 @@ Write-Success "Frontend Next.js iniciado"
 
 # 6. Aguardar serviços ficarem prontos
 Write-Step "6. Aguardando serviços ficarem prontos"
-Write-Info "Aguardando 20 segundos para os serviços iniciarem (incluindo frontend)..."
-Start-Sleep -Seconds 20
+Write-Info "Aguardando 15 segundos para os serviços backend iniciarem..."
+Start-Sleep -Seconds 15
+Write-Info "Aguardando mais 10 segundos para o frontend Next.js compilar..."
+Start-Sleep -Seconds 10
 
 # 7. Verificar health
 Write-Step "7. Verificando saúde dos serviços"

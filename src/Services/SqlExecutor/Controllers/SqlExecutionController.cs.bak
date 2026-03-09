@@ -1,0 +1,170 @@
+using Microsoft.AspNetCore.Mvc;
+using SqlExecutor.Service.Services;
+
+namespace SqlExecutor.Service.Controllers;
+
+[ApiController]
+[Route("api/sql")]
+public class SqlExecutionController : ControllerBase
+{
+    private readonly ISqlContainerManager _containerManager;
+    private readonly SqlQueryValidator _queryValidator;
+    private readonly SqlSessionManager _sessionManager;
+    private readonly ILogger<SqlExecutionController> _logger;
+
+    public SqlExecutionController(
+        ISqlContainerManager containerManager,
+        SqlQueryValidator queryValidator,
+        SqlSessionManager sessionManager,
+        ILogger<SqlExecutionController> logger)
+    {
+        _containerManager = containerManager;
+        _queryValidator = queryValidator;
+        _sessionManager = sessionManager;
+        _logger = logger;
+    }
+
+    /// <summary>
+    /// Executes a SQL query in an isolated container
+    /// </summary>
+    [HttpPost("execute")]
+    public async Task<IActionResult> ExecuteQuery([FromBody] ExecuteQueryRequest request)
+    {
+        try
+        {
+            // Validate query
+            var validation = _queryValidator.Validate(request.Query);
+            if (!validation.IsValid)
+            {
+                return BadRequest(new
+                {
+                    error = "INVALID_QUERY",
+                    message = validation.ErrorMessage,
+                    prohibitedOperation = validation.ProhibitedOperation
+                });
+            }
+
+            // Get or create container for session
+            var sessionId = request.SessionId ?? Guid.NewGuid().ToString();
+            var containerId = await _sessionManager.GetContainerForSessionAsync(sessionId);
+
+            if (containerId == null)
+            {
+                _logger.LogInformation("Creating new container for session {SessionId}", sessionId);
+                containerId = await _containerManager.CreateContainerAsync(sessionId);
+                await _sessionManager.AssociateContainerWithSessionAsync(sessionId, containerId);
+            }
+            else
+            {
+                _logger.LogInformation("Reusing container {ContainerId} for session {SessionId}", containerId, sessionId);
+                await _sessionManager.UpdateSessionActivityAsync(sessionId);
+            }
+
+            // Execute query with timeout
+            var result = await _containerManager.ExecuteQueryAsync(
+                containerId, 
+                request.Query, 
+                request.TimeoutSeconds ?? 5);
+
+            if (result.TimedOut)
+            {
+                return StatusCode(408, new
+                {
+                    error = "QUERY_TIMEOUT",
+                    message = $"Query execution exceeded {request.TimeoutSeconds ?? 5} second timeout",
+                    sessionId,
+                    executionTimeMs = result.ExecutionTimeMs
+                });
+            }
+
+            if (!result.Success)
+            {
+                return BadRequest(new
+                {
+                    error = "EXECUTION_ERROR",
+                    message = result.Error,
+                    sessionId,
+                    executionTimeMs = result.ExecutionTimeMs
+                });
+            }
+
+            // Limit result set to 1000 rows
+            var limitedResults = result.Results?.Take(1000).ToList();
+            var truncated = result.Results?.Count > 1000;
+
+            return Ok(new
+            {
+                success = true,
+                results = limitedResults,
+                rowCount = limitedResults?.Count ?? 0,
+                rowsAffected = result.RowsAffected,
+                truncated,
+                sessionId,
+                executionTimeMs = result.ExecutionTimeMs
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error executing SQL query");
+            return StatusCode(500, new
+            {
+                error = "INTERNAL_ERROR",
+                message = "An error occurred while executing the query"
+            });
+        }
+    }
+
+    /// <summary>
+    /// Validates a SQL query without executing it
+    /// </summary>
+    [HttpPost("validate")]
+    public IActionResult ValidateQuery([FromBody] ValidateQueryRequest request)
+    {
+        var validation = _queryValidator.Validate(request.Query);
+        
+        return Ok(new
+        {
+            isValid = validation.IsValid,
+            errorMessage = validation.ErrorMessage,
+            prohibitedOperation = validation.ProhibitedOperation
+        });
+    }
+
+    /// <summary>
+    /// Terminates a SQL session and cleans up resources
+    /// </summary>
+    [HttpDelete("session/{sessionId}")]
+    public async Task<IActionResult> TerminateSession(string sessionId)
+    {
+        try
+        {
+            var containerId = await _sessionManager.GetContainerForSessionAsync(sessionId);
+            
+            if (containerId != null)
+            {
+                await _containerManager.DestroyContainerAsync(containerId);
+            }
+
+            await _sessionManager.RemoveSessionAsync(sessionId);
+
+            return Ok(new { message = "Session terminated successfully" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error terminating session {SessionId}", sessionId);
+            return StatusCode(500, new { error = "Failed to terminate session" });
+        }
+    }
+}
+
+public class ExecuteQueryRequest
+{
+    public string Query { get; set; } = "";
+    public string? SessionId { get; set; }
+    public int? TimeoutSeconds { get; set; }
+}
+
+public class ValidateQueryRequest
+{
+    public string Query { get; set; } = "";
+}

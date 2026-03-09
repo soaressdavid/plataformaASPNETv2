@@ -14,29 +14,54 @@ services:
       - sqlserver_data:/var/opt/mssql
     networks:
       - platform-network
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'P@ssw0rd!2026#SecurePlatform' -Q 'SELECT 1' -C || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
 
   redis:
     image: redis:7-alpine
     container_name: aspnet-learning-redis
     ports:
       - "6379:6379"
+    volumes:
+      - redis_data:/data
     networks:
       - platform-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   rabbitmq:
-    image: rabbitmq:3-management-alpine
+    image: rabbitmq:3.12-management-alpine
     container_name: aspnet-learning-rabbitmq
     environment:
       RABBITMQ_DEFAULT_USER: "platform_user"
       RABBITMQ_DEFAULT_PASS: "SimplePass123"
+      RABBITMQ_DEFAULT_VHOST: "/"
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - "5672:5672"   # AMQP port
+      - "15672:15672" # Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
     networks:
       - platform-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
 
 volumes:
   sqlserver_data:
+  rabbitmq_data:
+  redis_data:
 
 networks:
   platform-network:

@@ -36,4 +36,39 @@ export const challengesApi = {
     );
     return response.data;
   },
+
+  /**
+   * Submit code review findings
+   */
+  submitCodeReview: async (
+    challengeId: string,
+    data: {
+      userId: string;
+      identifiedIssues: Array<{
+        lineNumber: number;
+        description: string;
+        severity: string;
+      }>;
+    }
+  ): Promise<{
+    success: boolean;
+    totalExpectedBugs: number;
+    correctlyIdentified: number;
+    missedBugs: number;
+    falsePositives: number;
+    accuracyPercentage: number;
+    xpAwarded: number;
+    bugResults: Array<{
+      lineNumber: number;
+      expectedDescription: string;
+      wasIdentified: boolean;
+      userDescription?: string;
+    }>;
+  }> => {
+    const response = await apiClient.post(
+      `/api/challenges/${challengeId}/code-review`,
+      data
+    );
+    return response.data;
+  },
 };

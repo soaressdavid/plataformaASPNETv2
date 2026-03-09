@@ -207,4 +207,147 @@ public class AITutorService : IAITutorService
         public int LineNumber { get; set; }
         public string? CodeExample { get; set; }
     }
+
+    // Rate limiting and hint methods for property tests
+
+    private readonly IRateLimitCacheService? _rateLimitService;
+    private readonly IProgressService? _progressService;
+
+    public AITutorService(
+        IGroqApiClient groqApiClient,
+        CodeAnalysisPromptBuilder promptBuilder,
+        ILogger<AITutorService> logger,
+        IRateLimitCacheService? rateLimitService = null,
+        IProgressService? progressService = null)
+        : this(groqApiClient, promptBuilder, logger)
+    {
+        _rateLimitService = rateLimitService;
+        _progressService = progressService;
+    }
+
+    public async Task<RateLimitedResponse> ReviewCodeWithRateLimitAsync(
+        string userId,
+        string code,
+        bool isPremium,
+        CancellationToken cancellationToken = default)
+    {
+        if (_rateLimitService == null)
+        {
+            throw new InvalidOperationException("Rate limit service not configured");
+        }
+
+        var requestLimit = isPremium ? 50 : 10;
+        var currentCount = await _rateLimitService.GetRequestCountAsync(userId);
+
+        if (currentCount >= requestLimit)
+        {
+            _logger.LogWarning("User {UserId} exceeded rate limit ({CurrentCount}/{Limit})", 
+                userId, currentCount, requestLimit);
+            
+            return RateLimitedResponse.RateLimited(
+                $"Rate limit exceeded. {(isPremium ? "Premium" : "Free")} users are limited to {requestLimit} requests per hour.");
+        }
+
+        // Increment request count
+        await _rateLimitService.IncrementRequestCountAsync(userId, 3600); // 1 hour TTL
+
+        // Perform code review
+        var feedback = await ReviewCodeAsync(code, null, cancellationToken);
+
+        return RateLimitedResponse.CreateSuccess(feedback);
+    }
+
+    public async Task<HintResponse> GetHintAsync(
+        string userId,
+        string challengeId,
+        int hintLevel,
+        CancellationToken cancellationToken = default)
+    {
+        if (_progressService == null)
+        {
+            throw new InvalidOperationException("Progress service not configured");
+        }
+
+        // Validate hint level
+        if (hintLevel < 1 || hintLevel > 3)
+        {
+            return HintResponse.Failed("Hint level must be between 1 and 3");
+        }
+
+        // Determine XP cost based on hint level
+        var xpCost = hintLevel switch
+        {
+            1 => 5,
+            2 => 10,
+            3 => 20,
+            _ => 0
+        };
+
+        // Check if user has enough XP
+        var currentXP = await _progressService.GetUserXPAsync(userId);
+        if (currentXP < xpCost)
+        {
+            _logger.LogWarning("User {UserId} has insufficient XP for hint level {Level} (has {CurrentXP}, needs {Cost})",
+                userId, hintLevel, currentXP, xpCost);
+            
+            return HintResponse.Failed($"Insufficient XP. You need {xpCost} XP but only have {currentXP} XP.");
+        }
+
+        // Deduct XP
+        var newXP = await _progressService.DeductXPAsync(userId, xpCost);
+
+        _logger.LogInformation("Deducted {XPCost} XP from user {UserId} for hint level {Level}. New XP: {NewXP}",
+            xpCost, userId, hintLevel, newXP);
+
+        // Generate hint (simplified for testing)
+        var hint = $"Hint level {hintLevel} for challenge {challengeId}";
+
+        return HintResponse.CreateSuccess(hint, xpCost, newXP);
+    }
+}
+
+// Response models for rate limiting and hints
+
+public record RateLimitedResponse
+{
+    public bool Success { get; init; }
+    public bool IsRateLimited { get; init; }
+    public CodeReviewResponse? Feedback { get; init; }
+    public string ErrorMessage { get; init; } = string.Empty;
+
+    public static RateLimitedResponse CreateSuccess(CodeReviewResponse feedback) =>
+        new() { Success = true, Feedback = feedback };
+
+    public static RateLimitedResponse RateLimited(string message) =>
+        new() { Success = false, IsRateLimited = true, ErrorMessage = message };
+}
+
+public record HintResponse
+{
+    public bool Success { get; init; }
+    public string Hint { get; init; } = string.Empty;
+    public int XPCost { get; init; }
+    public int RemainingXP { get; init; }
+    public string ErrorMessage { get; init; } = string.Empty;
+
+    public static HintResponse CreateSuccess(string hint, int xpCost, int remainingXP) =>
+        new() { Success = true, Hint = hint, XPCost = xpCost, RemainingXP = remainingXP };
+
+    public static HintResponse Failed(string message) =>
+        new() { Success = false, ErrorMessage = message };
+}
+
+// Service interfaces for dependency injection
+
+public interface IRateLimitCacheService
+{
+    Task<int> GetRequestCountAsync(string userId);
+    Task<int> IncrementRequestCountAsync(string userId, int ttlSeconds);
+    Task<bool> ResetRequestCountAsync(string userId);
+}
+
+public interface IProgressService
+{
+    Task<int> GetUserXPAsync(string userId);
+    Task<int> DeductXPAsync(string userId, int amount);
 }

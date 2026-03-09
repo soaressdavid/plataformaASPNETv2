@@ -1,0 +1,437 @@
+# SQL Server Production Deployment with Read Replicas
+# This manifest deploys SQL Server 2022 with high availability configuration
+# Requirements: 1.7, 1.8
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sql-server-config
+  namespace: platform-saas-prod
+data:
+  # SQL Server configuration
+  MSSQL_AGENT_ENABLED: "true"
+  MSSQL_PID: "Developer"  # Change to "Enterprise" for production license
+  ACCEPT_EULA: "Y"
+  
+  # Backup configuration
+  BACKUP_SCHEDULE: "0 2 * * *"  # Daily at 2 AM UTC
+  BACKUP_RETENTION_DAYS: "30"
+  
+  # Performance tuning
+  MSSQL_MEMORY_LIMIT_MB: "8192"
+  MSSQL_TCP_PORT: "1433"
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: sql-server-secret
+  namespace: platform-saas-prod
+type: Opaque
+stringData:
+  SA_PASSWORD: "YourStrong!Passw0rd"  # CHANGE THIS IN PRODUCTION
+  BACKUP_STORAGE_KEY: "your-storage-account-key"  # Azure Storage or S3 credentials
+
+---
+# Primary SQL Server StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: sql-server-primary
+  namespace: platform-saas-prod
+  labels:
+    app: sql-server
+    role: primary
+spec:
+  serviceName: sql-server-primary
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sql-server
+      role: primary
+  template:
+    metadata:
+      labels:
+        app: sql-server
+        role: primary
+    spec:
+      nodeSelector:
+        workload: database
+      tolerations:
+        - key: workload
+          operator: Equal
+          value: database
+          effect: NoSchedule
+      containers:
+        - name: sql-server
+          image: mcr.microsoft.com/mssql/server:2022-latest
+          ports:
+            - containerPort: 1433
+              name: sql
+          env:
+            - name: ACCEPT_EULA
+              valueFrom:
+                configMapKeyRef:
+                  name: sql-server-config
+                  key: ACCEPT_EULA
+            - name: MSSQL_SA_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: sql-server-secret
+                  key: SA_PASSWORD
+            - name: MSSQL_PID
+              valueFrom:
+                configMapKeyRef:
+                  name: sql-server-config
+                  key: MSSQL_PID
+            - name: MSSQL_AGENT_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: sql-server-config
+                  key: MSSQL_AGENT_ENABLED
+            - name: MSSQL_MEMORY_LIMIT_MB
+              valueFrom:
+                configMapKeyRef:
+                  name: sql-server-config
+                  key: MSSQL_MEMORY_LIMIT_MB
+          resources:
+            requests:
+              memory: "8Gi"
+              cpu: "4"
+            limits:
+              memory: "16Gi"
+              cpu: "8"
+          volumeMounts:
+            - name: sql-data
+              mountPath: /var/opt/mssql
+            - name: sql-backup
+              mountPath: /var/opt/mssql/backup
+            - name: sql-scripts
+              mountPath: /scripts
+          livenessProbe:
+            exec:
+              command:
+                - /bin/bash
+                - -c
+                - /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P $MSSQL_SA_PASSWORD -Q "SELECT 1" || exit 1
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command:
+                - /bin/bash
+                - -c
+                - /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P $MSSQL_SA_PASSWORD -Q "SELECT 1" || exit 1
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+      volumes:
+        - name: sql-scripts
+          configMap:
+            name: sql-server-scripts
+            defaultMode: 0755
+  volumeClaimTemplates:
+    - metadata:
+        name: sql-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: premium-ssd  # Use premium storage for production
+        resources:
+          requests:
+            storage: 500Gi
+    - metadata:
+        name: sql-backup
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: standard-ssd
+        resources:
+          requests:
+            storage: 1Ti
+
+---
+# Read Replica 1 StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: sql-server-replica-1
+  namespace: platform-saas-prod
+  labels:
+    app: sql-server
+    role: replica
+spec:
+  serviceName: sql-server-replica-1
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sql-server
+      role: replica
+      replica-id: "1"
+  template:
+    metadata:
+      labels:
+        app: sql-server
+        role: replica
+        replica-id: "1"
+    spec:
+      nodeSelector:
+        workload: database
+      tolerations:
+        - key: workload
+          operator: Equal
+          value: database
+          effect: NoSchedule
+      containers:
+        - name: sql-server
+          image: mcr.microsoft.com/mssql/server:2022-latest
+          ports:
+            - containerPort: 1433
+              name: sql
+          env:
+            - name: ACCEPT_EULA
+              valueFrom:
+                configMapKeyRef:
+                  name: sql-server-config
+                  key: ACCEPT_EULA
+            - name: MSSQL_SA_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: sql-server-secret
+                  key: SA_PASSWORD
+            - name: MSSQL_PID
+              valueFrom:
+                configMapKeyRef:
+                  name: sql-server-config
+                  key: MSSQL_PID
+            - name: MSSQL_AGENT_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: sql-server-config
+                  key: MSSQL_AGENT_ENABLED
+          resources:
+            requests:
+              memory: "8Gi"
+              cpu: "4"
+            limits:
+              memory: "16Gi"
+              cpu: "8"
+          volumeMounts:
+            - name: sql-data
+              mountPath: /var/opt/mssql
+          livenessProbe:
+            exec:
+              command:
+                - /bin/bash
+                - -c
+                - /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P $MSSQL_SA_PASSWORD -Q "SELECT 1" || exit 1
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command:
+                - /bin/bash
+                - -c
+                - /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P $MSSQL_SA_PASSWORD -Q "SELECT 1" || exit 1
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+  volumeClaimTemplates:
+    - metadata:
+        name: sql-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: premium-ssd
+        resources:
+          requests:
+            storage: 500Gi
+
+---
+# Read Replica 2 StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: sql-server-replica-2
+  namespace: platform-saas-prod
+  labels:
+    app: sql-server
+    role: replica
+spec:
+  serviceName: sql-server-replica-2
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sql-server
+      role: replica
+      replica-id: "2"
+  template:
+    metadata:
+      labels:
+        app: sql-server
+        role: replica
+        replica-id: "2"
+    spec:
+      nodeSelector:
+        workload: database
+      tolerations:
+        - key: workload
+          operator: Equal
+          value: database
+          effect: NoSchedule
+      containers:
+        - name: sql-server
+          image: mcr.microsoft.com/mssql/server:2022-latest
+          ports:
+            - containerPort: 1433
+              name: sql
+          env:
+            - name: ACCEPT_EULA
+              valueFrom:
+                configMapKeyRef:
+                  name: sql-server-config
+                  key: ACCEPT_EULA
+            - name: MSSQL_SA_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: sql-server-secret
+                  key: SA_PASSWORD
+            - name: MSSQL_PID
+              valueFrom:
+                configMapKeyRef:
+                  name: sql-server-config
+                  key: MSSQL_PID
+            - name: MSSQL_AGENT_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: sql-server-config
+                  key: MSSQL_AGENT_ENABLED
+          resources:
+            requests:
+              memory: "8Gi"
+              cpu: "4"
+            limits:
+              memory: "16Gi"
+              cpu: "8"
+          volumeMounts:
+            - name: sql-data
+              mountPath: /var/opt/mssql
+          livenessProbe:
+            exec:
+              command:
+                - /bin/bash
+                - -c
+                - /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P $MSSQL_SA_PASSWORD -Q "SELECT 1" || exit 1
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command:
+                - /bin/bash
+                - -c
+                - /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P $MSSQL_SA_PASSWORD -Q "SELECT 1" || exit 1
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+  volumeClaimTemplates:
+    - metadata:
+        name: sql-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: premium-ssd
+        resources:
+          requests:
+            storage: 500Gi
+
+---
+# Primary Service (Write Operations)
+apiVersion: v1
+kind: Service
+metadata:
+  name: sql-server-primary
+  namespace: platform-saas-prod
+  labels:
+    app: sql-server
+    role: primary
+spec:
+  type: ClusterIP
+  ports:
+    - port: 1433
+      targetPort: 1433
+      protocol: TCP
+      name: sql
+  selector:
+    app: sql-server
+    role: primary
+
+---
+# Read Replica Service (Read Operations - Load Balanced)
+apiVersion: v1
+kind: Service
+metadata:
+  name: sql-server-replicas
+  namespace: platform-saas-prod
+  labels:
+    app: sql-server
+    role: replica
+spec:
+  type: ClusterIP
+  sessionAffinity: ClientIP
+  ports:
+    - port: 1433
+      targetPort: 1433
+      protocol: TCP
+      name: sql
+  selector:
+    app: sql-server
+    role: replica
+
+---
+# Individual Replica Services (for direct access if needed)
+apiVersion: v1
+kind: Service
+metadata:
+  name: sql-server-replica-1
+  namespace: platform-saas-prod
+  labels:
+    app: sql-server
+    role: replica
+spec:
+  type: ClusterIP
+  ports:
+    - port: 1433
+      targetPort: 1433
+      protocol: TCP
+      name: sql
+  selector:
+    app: sql-server
+    role: replica
+    replica-id: "1"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sql-server-replica-2
+  namespace: platform-saas-prod
+  labels:
+    app: sql-server
+    role: replica
+spec:
+  type: ClusterIP
+  ports:
+    - port: 1433
+      targetPort: 1433
+      protocol: TCP
+      name: sql
+  selector:
+    app: sql-server
+    role: replica
+    replica-id: "2"

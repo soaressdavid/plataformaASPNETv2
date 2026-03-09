@@ -45,4 +45,104 @@ public static class XPCalculator
         
         return level * level * 100;
     }
+
+    /// <summary>
+    /// Gets the streak multiplier based on consecutive days
+    /// </summary>
+    public static decimal GetStreakMultiplier(int streakDays)
+    {
+        return streakDays switch
+        {
+            >= 100 => 1.5m,
+            >= 30 => 1.2m,
+            >= 7 => 1.1m,
+            _ => 1.0m
+        };
+    }
+
+    /// <summary>
+    /// Calculates XP with streak multiplier applied
+    /// </summary>
+    public static int CalculateXPWithStreak(int baseXP, int streakDays)
+    {
+        var multiplier = GetStreakMultiplier(streakDays);
+        return (int)(baseXP * multiplier);
+    }
+
+    /// <summary>
+    /// Gets base XP for an activity type
+    /// </summary>
+    public static int GetBaseXP(ActivityType activityType)
+    {
+        return activityType switch
+        {
+            ActivityType.LessonCompleted => 5,
+            ActivityType.EasyChallenge => 10,
+            ActivityType.MediumChallenge => 25,
+            ActivityType.HardChallenge => 50,
+            ActivityType.ProjectCompleted => 100,
+            ActivityType.HelpfulForumPost => 10,
+            ActivityType.DailyMissionCompleted => 50,
+            ActivityType.WeeklyMissionCompleted => 200,
+            _ => 0
+        };
+    }
+
+    /// <summary>
+    /// Calculates time attack bonus based on remaining time
+    /// </summary>
+    public static int CalculateTimeAttackBonus(int remainingSeconds)
+    {
+        return remainingSeconds switch
+        {
+            >= 600 => 50,  // 10+ minutes
+            >= 300 => 30,  // 5-10 minutes
+            _ => 10        // < 5 minutes
+        };
+    }
+
+    /// <summary>
+    /// Calculates total XP with all factors (base + time bonus) * streak multiplier
+    /// </summary>
+    public static int CalculateTotalXP(int baseXP, int streakDays, int timeBonus = 0)
+    {
+        return CalculateXPWithStreak(baseXP + timeBonus, streakDays);
+    }
+
+    /// <summary>
+    /// Calculates progress percentage to next level
+    /// </summary>
+    public static double CalculateProgressToNextLevel(int currentXP, int currentLevel)
+    {
+        var xpForCurrentLevel = CalculateXPForLevel(currentLevel);
+        var xpForNextLevel = CalculateXPForLevel(currentLevel + 1);
+        var xpNeeded = xpForNextLevel - xpForCurrentLevel;
+        var xpProgress = currentXP - xpForCurrentLevel;
+        
+        if (xpNeeded == 0) return 100.0;
+        
+        return Math.Round((xpProgress * 100.0) / xpNeeded, 2);
+    }
+
+    /// <summary>
+    /// Calculates XP for next level (alternative method name for compatibility)
+    /// </summary>
+    public static int CalculateXPForNextLevel(int currentLevel)
+    {
+        var xpForCurrentLevel = CalculateXPForLevel(currentLevel);
+        var xpForNextLevel = CalculateXPForLevel(currentLevel + 1);
+        return xpForNextLevel - xpForCurrentLevel;
+    }
+}
+
+public enum ActivityType
+{
+    LessonCompleted,
+    EasyChallenge,
+    MediumChallenge,
+    HardChallenge,
+    ProjectCompleted,
+    HelpfulForumPost,
+    DailyMissionCompleted,
+    WeeklyMissionCompleted
 }

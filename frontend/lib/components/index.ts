@@ -1,4 +1,5 @@
 export { ProtectedRoute } from './ProtectedRoute';
+export { Icons } from './Icons';
 export { CodeEditor } from './CodeEditor';
 export type { CodeEditorProps, CodeFile } from './CodeEditor';
 export { Dashboard } from './Dashboard';
@@ -41,3 +42,10 @@ export { Breadcrumb } from './Breadcrumb';
 export type { BreadcrumbProps, BreadcrumbItem } from './Breadcrumb';
 export { CourseCard } from './CourseCard';
 export type { CourseCardProps } from './CourseCard';
+export { CountdownTimer } from './TimeAttack/CountdownTimer';
+export { TimeAttackLeaderboard } from './TimeAttack/TimeAttackLeaderboard';
+export { CodeReviewPanel, CodeReviewResults } from './CodeReview';
+export type { BugMarker, CodeReviewPanelProps, BugValidationResult, CodeReviewResultsProps } from './CodeReview';
+export { SqlExecutor } from './SqlExecutor';
+export { TerminalExecutor } from './TerminalExecutor';
+export { AzureSimulator } from './AzureSimulator';

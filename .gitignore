@@ -82,3 +82,9 @@ RESUMO_*.md
 STATUS_*.md
 IMPLEMENTACAO_*.md
 EXECUCAO_*.md
+
+# No Docker Config
+appsettings.NoDocker.json
+*.db
+*.db-shm
+*.db-wal

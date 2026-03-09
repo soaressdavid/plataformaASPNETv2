@@ -23,7 +23,9 @@ export function Navigation() {
     { href: '/courses', label: 'Cursos', icon: <Icons.BookOpen className="w-4 h-4" /> },
     { href: '/challenges', label: 'Desafios', icon: <Icons.Code className="w-4 h-4" /> },
     { href: '/projects', label: 'Projetos', icon: <Icons.Rocket className="w-4 h-4" /> },
-    { href: '/ide', label: 'IDE', icon: <Icons.Sparkles className="w-4 h-4" /> },
+    { href: '/ide', label: 'IDE C#', icon: <Icons.Code className="w-4 h-4" /> },
+    { href: '/analytics', label: 'Analytics', icon: <Icons.ChartBar className="w-4 h-4" /> },
+    { href: '/notifications', label: 'Notificações', icon: <Icons.Bell className="w-4 h-4" /> },
     { href: '/leaderboard', label: 'Ranking', icon: <Icons.Trophy className="w-4 h-4" /> },
   ];
 

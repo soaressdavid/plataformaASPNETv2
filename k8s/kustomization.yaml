@@ -13,7 +13,7 @@ resources:
   
   # Infrastructure
   - postgres-deployment.yaml
-  - redis-deployment.yaml
+  - redis-cluster.yaml
   - rabbitmq-deployment.yaml
   
   # Microservices

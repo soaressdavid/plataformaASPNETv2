@@ -1,8 +1,5 @@
 using System.Net;
 using System.Net.Http.Json;
-using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
 using Shared.Data;
 using Course.Service.DTOs;
 using Xunit;
@@ -13,39 +10,15 @@ namespace Course.Tests.Integration;
 /// Integration tests for Level 2 and Level 3 API endpoints
 /// Validates: Requirements 4.7, 6.3, 6.6
 /// </summary>
-public class Level2And3ApiTests : IClassFixture<WebApplicationFactory<Program>>
+public class Level2And3ApiTests : IClassFixture<TestWebApplicationFactory>
 {
     private readonly HttpClient _client;
-    private readonly WebApplicationFactory<Program> _factory;
+    private readonly TestWebApplicationFactory _factory;
 
-    public Level2And3ApiTests(WebApplicationFactory<Program> factory)
+    public Level2And3ApiTests(TestWebApplicationFactory factory)
     {
-        _factory = factory.WithWebHostBuilder(builder =>
-        {
-            builder.ConfigureServices(services =>
-            {
-                // Remove existing DbContext
-                var descriptor = services.SingleOrDefault(
-                    d => d.ServiceType == typeof(DbContextOptions<ApplicationDbContext>));
-                if (descriptor != null)
-                {
-                    services.Remove(descriptor);
-                }
-
-                // Add in-memory database
-                services.AddDbContext<ApplicationDbContext>(options =>
-                {
-                    options.UseInMemoryDatabase("TestDb_Level2And3_" + Guid.NewGuid());
-                });
-
-                // Seed data
-                var sp = services.BuildServiceProvider();
-                using var scope = sp.CreateScope();
-                var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-                DbSeeder.SeedData(context);
-            });
-        });
-
+        _factory = factory;
+        _factory.EnsureSeeded(DbSeeder.SeedData);
         _client = _factory.CreateClient();
     }
 
@@ -96,7 +69,7 @@ public class Level2And3ApiTests : IClassFixture<WebApplicationFactory<Program>>
         
         var result = await response.Content.ReadFromJsonAsync<CourseListResponse>();
         Assert.NotNull(result);
-        Assert.Equal(4, result.Courses.Count); // Levels 0, 1, 2, 3
+        Assert.Equal(16, result.Courses.Count); // All 16 levels
     }
 
     [Fact]
@@ -213,3 +186,4 @@ public class Level2And3ApiTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.Equal("Banco de Dados e SQL", result.Courses[0].Title);
     }
 }
+

@@ -75,10 +75,16 @@ kubectl apply -f postgres-deployment.yaml
 kubectl wait --for=condition=ready pod -l app=postgres -n $NAMESPACE --timeout=$TIMEOUT
 print_status "PostgreSQL is ready"
 
-echo "  - Deploying Redis..."
-kubectl apply -f redis-deployment.yaml
-kubectl wait --for=condition=ready pod -l app=redis -n $NAMESPACE --timeout=$TIMEOUT
-print_status "Redis is ready"
+echo "  - Deploying Redis Cluster..."
+kubectl apply -f redis-cluster.yaml
+kubectl wait --for=condition=ready pod -l app=redis-cluster -n $NAMESPACE --timeout=$TIMEOUT
+print_status "Redis Cluster pods are ready"
+
+echo "  - Initializing Redis Cluster..."
+print_warning "Initializing Redis cluster with 3 masters and 3 replicas..."
+chmod +x init-redis-cluster.sh
+./init-redis-cluster.sh || print_warning "Redis cluster initialization may need manual intervention"
+print_status "Redis Cluster initialized"
 
 echo "  - Deploying RabbitMQ..."
 kubectl apply -f rabbitmq-deployment.yaml

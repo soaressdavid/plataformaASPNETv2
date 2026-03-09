@@ -2,55 +2,39 @@ using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Configure Serilog
-Log.Logger = new LoggerConfiguration()
-    .WriteTo.Console()
-    .CreateLogger();
+// Configure Serilog simples
+builder.Host.UseSerilog((context, configuration) =>
+{
+    configuration.WriteTo.Console();
+});
 
-builder.Host.UseSerilog();
-
-// Add CORS - Configurado com métodos e headers específicos para segurança
+// Add CORS
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowFrontend", policy =>
+    options.AddPolicy("AllowAll", policy =>
     {
-        policy.WithOrigins(
-                "http://localhost:3000",
-                "http://127.0.0.1:3000"
-              )
-              .WithMethods("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS")
-              .WithHeaders(
-                "Content-Type",
-                "Authorization",
-                "X-Requested-With",
-                "Accept",
-                "Origin"
-              )
-              .AllowCredentials(); // Permite cookies e headers de autenticação
+        policy.AllowAnyOrigin()
+              .AllowAnyMethod()
+              .AllowAnyHeader();
     });
 });
 
-// Add YARP reverse proxy com configuração simples
+// Add YARP reverse proxy
 builder.Services.AddReverseProxy()
     .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"));
 
-// Add health checks simples
+// Add health checks
 builder.Services.AddHealthChecks();
 
 var app = builder.Build();
 
-// CORS deve ser o primeiro middleware
-app.UseCors("AllowFrontend");
-
-// Request logging
-app.UseSerilogRequestLogging();
+// Use CORS
+app.UseCors("AllowAll");
 
 // Health check endpoint
 app.MapHealthChecks("/health");
 
-// Map reverse proxy - isso faz o roteamento para os serviços
+// Map reverse proxy
 app.MapReverseProxy();
 
 app.Run();
-
-Log.CloseAndFlush();

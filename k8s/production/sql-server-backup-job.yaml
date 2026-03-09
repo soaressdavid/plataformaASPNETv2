@@ -1,0 +1,417 @@
+# SQL Server Automated Backup CronJob
+# Performs daily full backups with 30-day retention
+# Requirements: 1.7, 1.8
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sql-server-scripts
+  namespace: platform-saas-prod
+data:
+  backup.sh: |
+    #!/bin/bash
+    set -e
+    
+    echo "Starting SQL Server backup at $(date)"
+    
+    # Configuration
+    BACKUP_DIR="/var/opt/mssql/backup"
+    TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+    BACKUP_FILE="PlatformSaaS_Full_${TIMESTAMP}.bak"
+    RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-30}
+    
+    # Create backup directory if it doesn't exist
+    mkdir -p ${BACKUP_DIR}
+    
+    # Perform full database backup
+    echo "Creating full backup: ${BACKUP_FILE}"
+    /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P ${MSSQL_SA_PASSWORD} -Q "
+    BACKUP DATABASE [PlatformSaaS] 
+    TO DISK = N'${BACKUP_DIR}/${BACKUP_FILE}' 
+    WITH COMPRESSION, 
+         CHECKSUM, 
+         STATS = 10,
+         FORMAT,
+         INIT,
+         NAME = 'PlatformSaaS Full Backup',
+         DESCRIPTION = 'Full backup created at ${TIMESTAMP}';
+    "
+    
+    if [ $? -eq 0 ]; then
+        echo "Backup completed successfully: ${BACKUP_FILE}"
+        
+        # Verify backup
+        echo "Verifying backup integrity..."
+        /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P ${MSSQL_SA_PASSWORD} -Q "
+        RESTORE VERIFYONLY 
+        FROM DISK = N'${BACKUP_DIR}/${BACKUP_FILE}' 
+        WITH CHECKSUM;
+        "
+        
+        if [ $? -eq 0 ]; then
+            echo "Backup verification successful"
+            
+            # Get backup file size
+            BACKUP_SIZE=$(du -h "${BACKUP_DIR}/${BACKUP_FILE}" | cut -f1)
+            echo "Backup size: ${BACKUP_SIZE}"
+            
+            # Upload to cloud storage (Azure Blob or S3)
+            if [ ! -z "${BACKUP_STORAGE_ACCOUNT}" ]; then
+                echo "Uploading backup to cloud storage..."
+                # Azure Blob Storage example
+                az storage blob upload \
+                    --account-name ${BACKUP_STORAGE_ACCOUNT} \
+                    --account-key ${BACKUP_STORAGE_KEY} \
+                    --container-name sql-backups \
+                    --name ${BACKUP_FILE} \
+                    --file ${BACKUP_DIR}/${BACKUP_FILE} \
+                    --tier Cool
+                
+                if [ $? -eq 0 ]; then
+                    echo "Backup uploaded to cloud storage successfully"
+                else
+                    echo "WARNING: Failed to upload backup to cloud storage"
+                fi
+            fi
+            
+            # Clean up old backups (keep last 30 days)
+            echo "Cleaning up backups older than ${RETENTION_DAYS} days..."
+            find ${BACKUP_DIR} -name "*.bak" -type f -mtime +${RETENTION_DAYS} -delete
+            echo "Old backups cleaned up"
+            
+            # Log backup completion
+            /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P ${MSSQL_SA_PASSWORD} -Q "
+            INSERT INTO [PlatformSaaS].[dbo].[BackupLog] 
+            (BackupDate, BackupType, BackupFile, BackupSize, Status)
+            VALUES 
+            (GETDATE(), 'FULL', '${BACKUP_FILE}', '${BACKUP_SIZE}', 'SUCCESS');
+            "
+            
+        else
+            echo "ERROR: Backup verification failed"
+            exit 1
+        fi
+    else
+        echo "ERROR: Backup failed"
+        exit 1
+    fi
+    
+    echo "Backup process completed at $(date)"
+
+  restore.sh: |
+    #!/bin/bash
+    set -e
+    
+    # Restore database from backup
+    # Usage: ./restore.sh <backup_file> [point_in_time]
+    
+    BACKUP_FILE=$1
+    POINT_IN_TIME=$2
+    BACKUP_DIR="/var/opt/mssql/backup"
+    
+    if [ -z "${BACKUP_FILE}" ]; then
+        echo "ERROR: Backup file not specified"
+        echo "Usage: ./restore.sh <backup_file> [point_in_time]"
+        exit 1
+    fi
+    
+    echo "Starting database restore from: ${BACKUP_FILE}"
+    
+    # Check if backup file exists
+    if [ ! -f "${BACKUP_DIR}/${BACKUP_FILE}" ]; then
+        echo "ERROR: Backup file not found: ${BACKUP_DIR}/${BACKUP_FILE}"
+        exit 1
+    fi
+    
+    # Get logical file names from backup
+    echo "Reading backup file information..."
+    /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P ${MSSQL_SA_PASSWORD} -Q "
+    RESTORE FILELISTONLY 
+    FROM DISK = N'${BACKUP_DIR}/${BACKUP_FILE}';
+    "
+    
+    # Restore database
+    echo "Restoring database..."
+    if [ -z "${POINT_IN_TIME}" ]; then
+        # Full restore
+        /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P ${MSSQL_SA_PASSWORD} -Q "
+        RESTORE DATABASE [PlatformSaaS_Restored] 
+        FROM DISK = N'${BACKUP_DIR}/${BACKUP_FILE}' 
+        WITH REPLACE,
+             RECOVERY,
+             STATS = 10;
+        "
+    else
+        # Point-in-time restore
+        echo "Performing point-in-time restore to: ${POINT_IN_TIME}"
+        /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P ${MSSQL_SA_PASSWORD} -Q "
+        RESTORE DATABASE [PlatformSaaS_Restored] 
+        FROM DISK = N'${BACKUP_DIR}/${BACKUP_FILE}' 
+        WITH REPLACE,
+             NORECOVERY,
+             STATS = 10;
+        
+        RESTORE LOG [PlatformSaaS_Restored]
+        FROM DISK = N'${BACKUP_DIR}/${BACKUP_FILE}'
+        WITH RECOVERY,
+             STOPAT = '${POINT_IN_TIME}';
+        "
+    fi
+    
+    if [ $? -eq 0 ]; then
+        echo "Database restored successfully"
+    else
+        echo "ERROR: Database restore failed"
+        exit 1
+    fi
+
+  setup-replication.sh: |
+    #!/bin/bash
+    set -e
+    
+    echo "Setting up SQL Server replication..."
+    
+    PRIMARY_HOST="sql-server-primary.platform-saas-prod.svc.cluster.local"
+    REPLICA1_HOST="sql-server-replica-1-0.sql-server-replica-1.platform-saas-prod.svc.cluster.local"
+    REPLICA2_HOST="sql-server-replica-2-0.sql-server-replica-2.platform-saas-prod.svc.cluster.local"
+    
+    # Wait for primary to be ready
+    echo "Waiting for primary SQL Server..."
+    until /opt/mssql-tools/bin/sqlcmd -S ${PRIMARY_HOST} -U sa -P ${MSSQL_SA_PASSWORD} -Q "SELECT 1" &> /dev/null
+    do
+        echo "Primary not ready, waiting..."
+        sleep 5
+    done
+    echo "Primary SQL Server is ready"
+    
+    # Enable Always On Availability Groups on primary
+    echo "Enabling Always On Availability Groups on primary..."
+    /opt/mssql-tools/bin/sqlcmd -S ${PRIMARY_HOST} -U sa -P ${MSSQL_SA_PASSWORD} -Q "
+    -- Enable Always On
+    EXEC sp_configure 'show advanced options', 1;
+    RECONFIGURE;
+    EXEC sp_configure 'hadr enabled', 1;
+    RECONFIGURE;
+    GO
+    
+    -- Create database master key
+    USE master;
+    IF NOT EXISTS (SELECT * FROM sys.symmetric_keys WHERE name = '##MS_DatabaseMasterKey##')
+    BEGIN
+        CREATE MASTER KEY ENCRYPTION BY PASSWORD = '${MSSQL_SA_PASSWORD}';
+    END
+    GO
+    
+    -- Create certificate for endpoint encryption
+    IF NOT EXISTS (SELECT * FROM sys.certificates WHERE name = 'AGCert')
+    BEGIN
+        CREATE CERTIFICATE AGCert WITH SUBJECT = 'AG Certificate';
+    END
+    GO
+    
+    -- Create endpoint
+    IF NOT EXISTS (SELECT * FROM sys.endpoints WHERE name = 'AGEndpoint')
+    BEGIN
+        CREATE ENDPOINT AGEndpoint
+        STATE = STARTED
+        AS TCP (LISTENER_PORT = 5022)
+        FOR DATABASE_MIRRORING (
+            ROLE = ALL,
+            AUTHENTICATION = CERTIFICATE AGCert,
+            ENCRYPTION = REQUIRED ALGORITHM AES
+        );
+    END
+    GO
+    
+    -- Set database to full recovery model
+    ALTER DATABASE [PlatformSaaS] SET RECOVERY FULL;
+    GO
+    
+    -- Create full backup (required for AG)
+    BACKUP DATABASE [PlatformSaaS] 
+    TO DISK = N'/var/opt/mssql/backup/PlatformSaaS_AG_Init.bak' 
+    WITH FORMAT, INIT, COMPRESSION;
+    GO
+    "
+    
+    echo "Replication setup completed on primary"
+    echo "Note: Manual configuration required for full Always On Availability Groups"
+    echo "For production, consider using SQL Server Always On Availability Groups or Log Shipping"
+
+  enable-pitr.sh: |
+    #!/bin/bash
+    set -e
+    
+    echo "Enabling Point-in-Time Recovery (PITR)..."
+    
+    # Set database to FULL recovery model (required for PITR)
+    /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P ${MSSQL_SA_PASSWORD} -Q "
+    -- Set recovery model to FULL
+    ALTER DATABASE [PlatformSaaS] SET RECOVERY FULL;
+    GO
+    
+    -- Create backup log table
+    IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'BackupLog')
+    BEGIN
+        CREATE TABLE [dbo].[BackupLog] (
+            BackupId INT IDENTITY(1,1) PRIMARY KEY,
+            BackupDate DATETIME NOT NULL DEFAULT GETDATE(),
+            BackupType VARCHAR(20) NOT NULL,
+            BackupFile VARCHAR(500) NOT NULL,
+            BackupSize VARCHAR(50),
+            Status VARCHAR(20) NOT NULL,
+            ErrorMessage VARCHAR(MAX)
+        );
+    END
+    GO
+    
+    -- Enable transaction log backups (every 15 minutes)
+    -- This allows point-in-time recovery with 15-minute granularity
+    PRINT 'Point-in-Time Recovery enabled';
+    PRINT 'Recovery model: FULL';
+    PRINT 'Transaction log backups: Every 15 minutes';
+    PRINT 'Recovery granularity: 15 minutes';
+    "
+    
+    echo "PITR enabled successfully"
+    echo "Transaction log backups will be performed every 15 minutes"
+
+---
+# CronJob for Daily Full Backups
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: sql-server-backup
+  namespace: platform-saas-prod
+  labels:
+    app: sql-server-backup
+spec:
+  schedule: "0 2 * * *"  # Daily at 2 AM UTC
+  successfulJobsHistoryLimit: 7
+  failedJobsHistoryLimit: 3
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: sql-server-backup
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: backup
+              image: mcr.microsoft.com/mssql-tools
+              command: ["/bin/bash", "/scripts/backup.sh"]
+              env:
+                - name: MSSQL_SA_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: sql-server-secret
+                      key: SA_PASSWORD
+                - name: BACKUP_RETENTION_DAYS
+                  valueFrom:
+                    configMapKeyRef:
+                      name: sql-server-config
+                      key: BACKUP_RETENTION_DAYS
+                - name: BACKUP_STORAGE_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: sql-server-secret
+                      key: BACKUP_STORAGE_KEY
+                      optional: true
+              volumeMounts:
+                - name: sql-backup
+                  mountPath: /var/opt/mssql/backup
+                - name: sql-scripts
+                  mountPath: /scripts
+          volumes:
+            - name: sql-backup
+              persistentVolumeClaim:
+                claimName: sql-backup-pvc
+            - name: sql-scripts
+              configMap:
+                name: sql-server-scripts
+                defaultMode: 0755
+
+---
+# CronJob for Transaction Log Backups (every 15 minutes for PITR)
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: sql-server-log-backup
+  namespace: platform-saas-prod
+  labels:
+    app: sql-server-log-backup
+spec:
+  schedule: "*/15 * * * *"  # Every 15 minutes
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: sql-server-log-backup
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: log-backup
+              image: mcr.microsoft.com/mssql-tools
+              command:
+                - /bin/bash
+                - -c
+                - |
+                  TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+                  BACKUP_FILE="PlatformSaaS_Log_${TIMESTAMP}.trn"
+                  
+                  echo "Creating transaction log backup: ${BACKUP_FILE}"
+                  /opt/mssql-tools/bin/sqlcmd -S sql-server-primary -U sa -P ${MSSQL_SA_PASSWORD} -Q "
+                  BACKUP LOG [PlatformSaaS] 
+                  TO DISK = N'/var/opt/mssql/backup/${BACKUP_FILE}' 
+                  WITH COMPRESSION, 
+                       CHECKSUM, 
+                       STATS = 10,
+                       FORMAT,
+                       INIT,
+                       NAME = 'PlatformSaaS Log Backup';
+                  "
+                  
+                  if [ $? -eq 0 ]; then
+                      echo "Log backup completed: ${BACKUP_FILE}"
+                      
+                      # Clean up log backups older than 7 days
+                      find /var/opt/mssql/backup -name "*.trn" -type f -mtime +7 -delete
+                  else
+                      echo "ERROR: Log backup failed"
+                      exit 1
+                  fi
+              env:
+                - name: MSSQL_SA_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: sql-server-secret
+                      key: SA_PASSWORD
+              volumeMounts:
+                - name: sql-backup
+                  mountPath: /var/opt/mssql/backup
+          volumes:
+            - name: sql-backup
+              persistentVolumeClaim:
+                claimName: sql-backup-pvc
+
+---
+# PersistentVolumeClaim for backups
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: sql-backup-pvc
+  namespace: platform-saas-prod
+spec:
+  accessModes:
+    - ReadWriteMany  # Allows multiple pods to access backups
+  storageClassName: standard-ssd
+  resources:
+    requests:
+      storage: 1Ti

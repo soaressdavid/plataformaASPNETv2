@@ -6,3 +6,8 @@ export { progressApi } from './progress';
 export { codeExecutionApi } from './code-execution';
 export { aiTutorApi } from './ai-tutor';
 export { projectsApi } from './projects';
+export { chatApi } from './chat';
+export { forumApi } from './forum';
+export { collaborationApi } from './collaboration';
+export { notificationsApi } from './notifications';
+export * from './ide-session';

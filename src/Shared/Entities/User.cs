@@ -17,6 +17,11 @@ public class User : BaseEntity
     [Required]
     public string PasswordHash { get; set; } = string.Empty;
 
+    // Account lockout fields
+    public int FailedLoginAttempts { get; set; } = 0;
+    public DateTime? LockoutEnd { get; set; }
+    public bool IsLockedOut => LockoutEnd.HasValue && LockoutEnd.Value > DateTime.UtcNow;
+
     // Navigation properties
     public Progress? Progress { get; set; }
     public ICollection<Enrollment> Enrollments { get; set; } = new List<Enrollment>();

@@ -1,0 +1,79 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: aspnet-learning-platform-production
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: production
+  
+  source:
+    repoURL: https://github.com/your-org/aspnet-learning-platform.git
+    targetRevision: HEAD
+    path: k8s/overlays/production
+  
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: production
+  
+  syncPolicy:
+    # Manual sync for production (requires approval)
+    automated: null
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 5m
+  
+  revisionHistoryLimit: 20
+  
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: production
+  namespace: argocd
+spec:
+  description: Production environment project
+  
+  sourceRepos:
+    - https://github.com/your-org/aspnet-learning-platform.git
+  
+  destinations:
+    - namespace: production
+      server: https://kubernetes.default.svc
+  
+  clusterResourceWhitelist:
+    - group: '*'
+      kind: '*'
+  
+  namespaceResourceWhitelist:
+    - group: '*'
+      kind: '*'
+  
+  roles:
+    - name: admin
+      description: Admin privileges for production
+      policies:
+        - p, proj:production:admin, applications, *, production/*, allow
+      groups:
+        - production-admins
+    
+    - name: deployer
+      description: Deployment privileges for production
+      policies:
+        - p, proj:production:deployer, applications, sync, production/*, allow
+        - p, proj:production:deployer, applications, get, production/*, allow
+      groups:
+        - production-deployers

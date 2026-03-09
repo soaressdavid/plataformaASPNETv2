@@ -519,7 +519,7 @@ public class MappingExtensionsTests
             },
             Exercises = new[]
             {
-                new { Title = "Exercise 1", Description = "Complete this", Difficulty = "Easy", StarterCode = "// Start", Hints = new[] { "Hint 1" } }
+                new { Title = "Exercise 1", Description = "Complete this", Difficulty = 0, StarterCode = "// Start", Hints = new[] { "Hint 1" } }
             },
             Summary = "Well done!"
         };
@@ -651,7 +651,7 @@ public class MappingExtensionsTests
         Assert.Single(dto.CodeExamples);
         Assert.Equal("Example 1", dto.CodeExamples[0].Title);
         Assert.Single(dto.Exercises);
-        Assert.Equal("Easy", dto.Exercises[0].Difficulty);
+        Assert.Equal("Fácil", dto.Exercises[0].Difficulty);
         Assert.Equal("Summary text", dto.Summary);
     }
 

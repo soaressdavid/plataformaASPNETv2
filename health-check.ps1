@@ -14,6 +14,7 @@ Write-Host "║              HEALTH CHECK - Todos os Serviços             ║" 
 Write-Host "╚═══════════════════════════════════════════════════════════╝`n" -ForegroundColor Cyan
 
 $services = @(
+    @{Name="Frontend (Next.js)"; Url="http://localhost:3000"},
     @{Name="ApiGateway"; Url="http://localhost:5000/health"},
     @{Name="Auth Service"; Url="http://localhost:5001/health"},
     @{Name="Course Service"; Url="http://localhost:5002/health"},
@@ -27,7 +28,7 @@ $healthyCount = 0
 $unhealthyCount = 0
 
 foreach ($service in $services) {
-    Write-Host "Verificando $($service.Name.PadRight(20))... " -NoNewline
+    Write-Host "Verificando $($service.Name.PadRight(25))... " -NoNewline
     
     try {
         $response = Invoke-WebRequest -Uri $service.Url -TimeoutSec 5 -UseBasicParsing -ErrorAction Stop
@@ -50,11 +51,13 @@ Write-Host "`n--- Infraestrutura Docker ---`n" -ForegroundColor Cyan
 
 Write-Host "SQL Server                   ... " -NoNewline
 try {
-    $containerStatus = docker inspect aspnet-learning-sqlserver --format='{{.State.Running}}' 2>&1
-    if ($containerStatus -eq "true") {
-        Write-Host "✅ Rodando" -ForegroundColor Green
+    $containerStatus = docker inspect aspnet-learning-sqlserver --format='{{.State.Health.Status}}' 2>&1
+    if ($containerStatus -eq "healthy") {
+        Write-Host "✅ Saudável" -ForegroundColor Green
+    } elseif ($containerStatus -eq "starting") {
+        Write-Host "⚠️  Iniciando..." -ForegroundColor Yellow
     } else {
-        Write-Host "❌ Não disponível" -ForegroundColor Red
+        Write-Host "❌ Não saudável" -ForegroundColor Red
     }
 } catch {
     Write-Host "❌ Não disponível" -ForegroundColor Red
@@ -62,19 +65,27 @@ try {
 
 Write-Host "RabbitMQ                     ... " -NoNewline
 try {
-    $response = Invoke-WebRequest -Uri "http://localhost:15672" -TimeoutSec 3 -UseBasicParsing -ErrorAction Stop
-    Write-Host "✅ Rodando" -ForegroundColor Green
+    $containerStatus = docker inspect aspnet-learning-rabbitmq --format='{{.State.Health.Status}}' 2>&1
+    if ($containerStatus -eq "healthy") {
+        Write-Host "✅ Saudável" -ForegroundColor Green
+    } elseif ($containerStatus -eq "starting") {
+        Write-Host "⚠️  Iniciando..." -ForegroundColor Yellow
+    } else {
+        Write-Host "❌ Não saudável" -ForegroundColor Red
+    }
 } catch {
     Write-Host "❌ Não disponível" -ForegroundColor Red
 }
 
 Write-Host "Redis                        ... " -NoNewline
 try {
-    docker exec aspnet-learning-redis redis-cli ping | Out-Null
-    if ($LASTEXITCODE -eq 0) {
-        Write-Host "✅ Rodando" -ForegroundColor Green
+    $containerStatus = docker inspect aspnet-learning-redis --format='{{.State.Health.Status}}' 2>&1
+    if ($containerStatus -eq "healthy") {
+        Write-Host "✅ Saudável" -ForegroundColor Green
+    } elseif ($containerStatus -eq "starting") {
+        Write-Host "⚠️  Iniciando..." -ForegroundColor Yellow
     } else {
-        Write-Host "❌ Não disponível" -ForegroundColor Red
+        Write-Host "❌ Não saudável" -ForegroundColor Red
     }
 } catch {
     Write-Host "❌ Não disponível" -ForegroundColor Red

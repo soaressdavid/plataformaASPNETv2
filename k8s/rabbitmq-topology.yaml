@@ -1,0 +1,312 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rabbitmq-topology
+  namespace: aspnet-learning-platform
+data:
+  topology.json: |
+    {
+      "exchanges": [
+        {
+          "name": "learning.events",
+          "type": "topic",
+          "durable": true,
+          "autoDelete": false,
+          "description": "Main event exchange for all domain events"
+        },
+        {
+          "name": "execution.events",
+          "type": "topic",
+          "durable": true,
+          "autoDelete": false,
+          "description": "Code execution events"
+        },
+        {
+          "name": "gamification.events",
+          "type": "topic",
+          "durable": true,
+          "autoDelete": false,
+          "description": "Gamification events (XP, achievements, levels)"
+        },
+        {
+          "name": "notification.events",
+          "type": "topic",
+          "durable": true,
+          "autoDelete": false,
+          "description": "Notification events"
+        },
+        {
+          "name": "analytics.events",
+          "type": "topic",
+          "durable": true,
+          "autoDelete": false,
+          "description": "Analytics and telemetry events"
+        },
+        {
+          "name": "dlx.events",
+          "type": "topic",
+          "durable": true,
+          "autoDelete": false,
+          "description": "Dead letter exchange for failed messages"
+        }
+      ],
+      "queues": [
+        {
+          "name": "code-executor.requests",
+          "durable": true,
+          "autoDelete": false,
+          "arguments": {
+            "x-message-ttl": 300000,
+            "x-max-length": 10000,
+            "x-dead-letter-exchange": "dlx.events",
+            "x-dead-letter-routing-key": "code-executor.failed"
+          },
+          "bindings": [
+            {
+              "exchange": "execution.events",
+              "routingKey": "execution.request.*"
+            }
+          ]
+        },
+        {
+          "name": "code-executor.results",
+          "durable": true,
+          "autoDelete": false,
+          "arguments": {
+            "x-message-ttl": 300000,
+            "x-dead-letter-exchange": "dlx.events",
+            "x-dead-letter-routing-key": "code-executor.results.failed"
+          },
+          "bindings": [
+            {
+              "exchange": "execution.events",
+              "routingKey": "execution.completed.*"
+            }
+          ]
+        },
+        {
+          "name": "sql-executor.requests",
+          "durable": true,
+          "autoDelete": false,
+          "arguments": {
+            "x-message-ttl": 300000,
+            "x-max-length": 10000,
+            "x-dead-letter-exchange": "dlx.events",
+            "x-dead-letter-routing-key": "sql-executor.failed"
+          },
+          "bindings": [
+            {
+              "exchange": "execution.events",
+              "routingKey": "sql.request.*"
+            }
+          ]
+        },
+        {
+          "name": "sql-executor.results",
+          "durable": true,
+          "autoDelete": false,
+          "arguments": {
+            "x-message-ttl": 300000,
+            "x-dead-letter-exchange": "dlx.events",
+            "x-dead-letter-routing-key": "sql-executor.results.failed"
+          },
+          "bindings": [
+            {
+              "exchange": "execution.events",
+              "routingKey": "sql.completed.*"
+            }
+          ]
+        },
+        {
+          "name": "gamification.xp-awarded",
+          "durable": true,
+          "autoDelete": false,
+          "arguments": {
+            "x-dead-letter-exchange": "dlx.events",
+            "x-dead-letter-routing-key": "gamification.xp.failed"
+          },
+          "bindings": [
+            {
+              "exchange": "gamification.events",
+              "routingKey": "gamification.xp.*"
+            }
+          ]
+        },
+        {
+          "name": "gamification.achievements",
+          "durable": true,
+          "autoDelete": false,
+          "arguments": {
+            "x-dead-letter-exchange": "dlx.events",
+            "x-dead-letter-routing-key": "gamification.achievement.failed"
+          },
+          "bindings": [
+            {
+              "exchange": "gamification.events",
+              "routingKey": "gamification.achievement.*"
+            }
+          ]
+        },
+        {
+          "name": "gamification.level-up",
+          "durable": true,
+          "autoDelete": false,
+          "arguments": {
+            "x-dead-letter-exchange": "dlx.events",
+            "x-dead-letter-routing-key": "gamification.levelup.failed"
+          },
+          "bindings": [
+            {
+              "exchange": "gamification.events",
+              "routingKey": "gamification.levelup.*"
+            }
+          ]
+        },
+        {
+          "name": "notification.email",
+          "durable": true,
+          "autoDelete": false,
+          "arguments": {
+            "x-message-ttl": 600000,
+            "x-dead-letter-exchange": "dlx.events",
+            "x-dead-letter-routing-key": "notification.email.failed"
+          },
+          "bindings": [
+            {
+              "exchange": "notification.events",
+              "routingKey": "notification.email.*"
+            }
+          ]
+        },
+        {
+          "name": "notification.push",
+          "durable": true,
+          "autoDelete": false,
+          "arguments": {
+            "x-message-ttl": 600000,
+            "x-dead-letter-exchange": "dlx.events",
+            "x-dead-letter-routing-key": "notification.push.failed"
+          },
+          "bindings": [
+            {
+              "exchange": "notification.events",
+              "routingKey": "notification.push.*"
+            }
+          ]
+        },
+        {
+          "name": "notification.in-app",
+          "durable": true,
+          "autoDelete": false,
+          "arguments": {
+            "x-dead-letter-exchange": "dlx.events",
+            "x-dead-letter-routing-key": "notification.inapp.failed"
+          },
+          "bindings": [
+            {
+              "exchange": "notification.events",
+              "routingKey": "notification.inapp.*"
+            }
+          ]
+        },
+        {
+          "name": "analytics.telemetry",
+          "durable": true,
+          "autoDelete": false,
+          "arguments": {
+            "x-message-ttl": 3600000,
+            "x-dead-letter-exchange": "dlx.events",
+            "x-dead-letter-routing-key": "analytics.telemetry.failed"
+          },
+          "bindings": [
+            {
+              "exchange": "analytics.events",
+              "routingKey": "analytics.#"
+            }
+          ]
+        },
+        {
+          "name": "ai-tutor.requests",
+          "durable": true,
+          "autoDelete": false,
+          "arguments": {
+            "x-message-ttl": 300000,
+            "x-max-length": 5000,
+            "x-dead-letter-exchange": "dlx.events",
+            "x-dead-letter-routing-key": "ai-tutor.failed"
+          },
+          "bindings": [
+            {
+              "exchange": "learning.events",
+              "routingKey": "ai.request.*"
+            }
+          ]
+        },
+        {
+          "name": "dlq.code-executor",
+          "durable": true,
+          "autoDelete": false,
+          "bindings": [
+            {
+              "exchange": "dlx.events",
+              "routingKey": "code-executor.*"
+            }
+          ]
+        },
+        {
+          "name": "dlq.sql-executor",
+          "durable": true,
+          "autoDelete": false,
+          "bindings": [
+            {
+              "exchange": "dlx.events",
+              "routingKey": "sql-executor.*"
+            }
+          ]
+        },
+        {
+          "name": "dlq.gamification",
+          "durable": true,
+          "autoDelete": false,
+          "bindings": [
+            {
+              "exchange": "dlx.events",
+              "routingKey": "gamification.*"
+            }
+          ]
+        },
+        {
+          "name": "dlq.notification",
+          "durable": true,
+          "autoDelete": false,
+          "bindings": [
+            {
+              "exchange": "dlx.events",
+              "routingKey": "notification.*"
+            }
+          ]
+        },
+        {
+          "name": "dlq.analytics",
+          "durable": true,
+          "autoDelete": false,
+          "bindings": [
+            {
+              "exchange": "dlx.events",
+              "routingKey": "analytics.*"
+            }
+          ]
+        },
+        {
+          "name": "dlq.ai-tutor",
+          "durable": true,
+          "autoDelete": false,
+          "bindings": [
+            {
+              "exchange": "dlx.events",
+              "routingKey": "ai-tutor.*"
+            }
+          ]
+        }
+      ]
+    }

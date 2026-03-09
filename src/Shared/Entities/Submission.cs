@@ -19,6 +19,11 @@ public class Submission : BaseEntity
 
     public string Result { get; set; } = string.Empty;
 
+    // Time Attack fields
+    public bool IsTimeAttack { get; set; }
+    public int? CompletionTimeSeconds { get; set; }
+    public int? TimeAttackBonusXP { get; set; }
+
     // Navigation properties
     [ForeignKey(nameof(UserId))]
     public User User { get; set; } = null!;

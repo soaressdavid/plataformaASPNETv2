@@ -1,6 +1,5 @@
 using System.Net;
 using System.Net.Http.Json;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -13,47 +12,20 @@ namespace Course.Tests.Integration;
 /// <summary>
 /// Integration tests for Levels API endpoints
 /// </summary>
-public class LevelsApiTests : IClassFixture<WebApplicationFactory<Program>>
+public class LevelsApiTests : IClassFixture<TestWebApplicationFactory>
 {
-    private readonly WebApplicationFactory<Program> _factory;
+    private readonly TestWebApplicationFactory _factory;
     private readonly HttpClient _client;
 
-    public LevelsApiTests(WebApplicationFactory<Program> factory)
+    public LevelsApiTests(TestWebApplicationFactory factory)
     {
-        _factory = factory.WithWebHostBuilder(builder =>
-        {
-            builder.ConfigureServices(services =>
-            {
-                // Remove existing DbContext
-                var descriptor = services.SingleOrDefault(
-                    d => d.ServiceType == typeof(DbContextOptions<ApplicationDbContext>));
-                if (descriptor != null)
-                {
-                    services.Remove(descriptor);
-                }
-
-                // Add in-memory database for testing
-                services.AddDbContext<ApplicationDbContext>(options =>
-                {
-                    options.UseInMemoryDatabase("TestDb_Levels");
-                });
-
-                // Seed test data
-                var sp = services.BuildServiceProvider();
-                using var scope = sp.CreateScope();
-                var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-                SeedTestData(context);
-            });
-        });
-
+        _factory = factory;
+        _factory.EnsureSeeded(SeedTestData);
         _client = _factory.CreateClient();
     }
 
     private static void SeedTestData(ApplicationDbContext context)
     {
-        context.Database.EnsureDeleted();
-        context.Database.EnsureCreated();
-
         var level0 = new CurriculumLevel
         {
             Id = Guid.NewGuid(),
@@ -99,7 +71,6 @@ public class LevelsApiTests : IClassFixture<WebApplicationFactory<Program>>
         };
 
         context.Courses.AddRange(course1, course2);
-        context.SaveChanges();
     }
 
     [Fact]
@@ -124,7 +95,7 @@ public class LevelsApiTests : IClassFixture<WebApplicationFactory<Program>>
     public async Task GetLevelById_ValidId_ReturnsOkWithLevelDetail()
     {
         // Arrange
-        using var scope = _factory.Services.CreateScope();
+        using var scope = _factory.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         var level = context.CurriculumLevels.First();
 
@@ -160,7 +131,7 @@ public class LevelsApiTests : IClassFixture<WebApplicationFactory<Program>>
     public async Task GetLevelCourses_ValidId_ReturnsOkWithCourses()
     {
         // Arrange
-        using var scope = _factory.Services.CreateScope();
+        using var scope = _factory.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         var level = context.CurriculumLevels.First();
 
@@ -210,7 +181,7 @@ public class LevelsApiTests : IClassFixture<WebApplicationFactory<Program>>
     public async Task GetLevelById_IncludesCoursesOrderedByOrderIndex()
     {
         // Arrange
-        using var scope = _factory.Services.CreateScope();
+        using var scope = _factory.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         var level = context.CurriculumLevels.First();
 
@@ -227,3 +198,5 @@ public class LevelsApiTests : IClassFixture<WebApplicationFactory<Program>>
         }
     }
 }
+
+

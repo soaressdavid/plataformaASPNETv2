@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/cjs/styles/prism';
 import { Icons } from './Icons';
@@ -33,6 +34,7 @@ export function CodeExample({
   isRunnable,
   onRun,
 }: CodeExampleProps) {
+  const router = useRouter();
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
@@ -46,6 +48,7 @@ export function CodeExample({
   };
 
   const handleRun = () => {
+    // Sempre executar através do onRun se disponível
     if (onRun) {
       onRun(code);
     }

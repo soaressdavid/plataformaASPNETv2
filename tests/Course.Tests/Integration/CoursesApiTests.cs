@@ -1,6 +1,5 @@
 using System.Net;
 using System.Net.Http.Json;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -13,47 +12,20 @@ namespace Course.Tests.Integration;
 /// <summary>
 /// Integration tests for Courses API endpoints
 /// </summary>
-public class CoursesApiTests : IClassFixture<WebApplicationFactory<Program>>
+public class CoursesApiTests : IClassFixture<TestWebApplicationFactory>
 {
-    private readonly WebApplicationFactory<Program> _factory;
+    private readonly TestWebApplicationFactory _factory;
     private readonly HttpClient _client;
 
-    public CoursesApiTests(WebApplicationFactory<Program> factory)
+    public CoursesApiTests(TestWebApplicationFactory factory)
     {
-        _factory = factory.WithWebHostBuilder(builder =>
-        {
-            builder.ConfigureServices(services =>
-            {
-                // Remove existing DbContext
-                var descriptor = services.SingleOrDefault(
-                    d => d.ServiceType == typeof(DbContextOptions<ApplicationDbContext>));
-                if (descriptor != null)
-                {
-                    services.Remove(descriptor);
-                }
-
-                // Add in-memory database for testing
-                services.AddDbContext<ApplicationDbContext>(options =>
-                {
-                    options.UseInMemoryDatabase("TestDb_Courses");
-                });
-
-                // Seed test data
-                var sp = services.BuildServiceProvider();
-                using var scope = sp.CreateScope();
-                var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-                SeedTestData(context);
-            });
-        });
-
+        _factory = factory;
+        _factory.EnsureSeeded(SeedTestData);
         _client = _factory.CreateClient();
     }
 
     private static void SeedTestData(ApplicationDbContext context)
     {
-        context.Database.EnsureDeleted();
-        context.Database.EnsureCreated();
-
         var level0 = new CurriculumLevel
         {
             Id = Guid.NewGuid(),
@@ -90,22 +62,64 @@ public class CoursesApiTests : IClassFixture<WebApplicationFactory<Program>>
             EstimatedMinutes = 30,
             Content = "<h1>Variáveis</h1><p>Conteúdo da aula</p>",
             StructuredContent = @"{
-                ""objectives"": [""Entender variáveis""],
-                ""sections"": [
+                ""Objectives"": [""Entender variáveis"", ""Aprender tipos de dados"", ""Praticar declarações""],
+                ""Theory"": [
                     {
-                        ""type"": ""theory"",
-                        ""heading"": ""O que são variáveis?"",
-                        ""content"": ""Variáveis armazenam dados"",
-                        ""order"": 1
+                        ""Heading"": ""O que são variáveis?"",
+                        ""Content"": ""Variáveis são espaços na memória que armazenam dados. Em C#, toda variável tem um tipo que define que tipo de dado ela pode armazenar. Por exemplo, int para números inteiros, string para texto, bool para valores verdadeiro/falso. A declaração de uma variável segue o padrão: tipo nome = valor. É importante escolher nomes descritivos para suas variáveis, facilitando a leitura e manutenção do código."",
+                        ""Order"": 1
+                    },
+                    {
+                        ""Heading"": ""Tipos de Dados Primitivos"",
+                        ""Content"": ""C# possui diversos tipos primitivos: int (números inteiros), double (números decimais), bool (verdadeiro/falso), char (caractere único), string (texto). Cada tipo tem um tamanho específico na memória e um intervalo de valores possíveis. Por exemplo, int pode armazenar valores de -2.147.483.648 a 2.147.483.647. Escolher o tipo correto é importante para otimizar o uso de memória."",
+                        ""Order"": 2
                     }
                 ],
-                ""summary"": ""Você aprendeu sobre variáveis""
+                ""CodeExamples"": [
+                    {
+                        ""Title"": ""Declaração de Variáveis"",
+                        ""Code"": ""int idade = 25;\nstring nome = \""João\"";\nbool ativo = true;\ndouble salario = 3500.50;"",
+                        ""Language"": ""csharp"",
+                        ""Explanation"": ""Exemplos de declaração de variáveis com diferentes tipos"",
+                        ""IsRunnable"": true
+                    },
+                    {
+                        ""Title"": ""Operações com Variáveis"",
+                        ""Code"": ""int a = 10;\nint b = 20;\nint soma = a + b;\nConsole.WriteLine(soma);"",
+                        ""Language"": ""csharp"",
+                        ""Explanation"": ""Realizando operações matemáticas com variáveis"",
+                        ""IsRunnable"": true
+                    }
+                ],
+                ""Exercises"": [
+                    {
+                        ""Title"": ""Declarar Variáveis"",
+                        ""Description"": ""Declare três variáveis: uma para idade (int), uma para nome (string) e uma para ativo (bool)"",
+                        ""Difficulty"": 0,
+                        ""StarterCode"": ""// Declare suas variáveis aqui"",
+                        ""Hints"": [""Use int para idade"", ""Use string para nome"", ""Use bool para ativo""]
+                    },
+                    {
+                        ""Title"": ""Calcular Soma"",
+                        ""Description"": ""Crie duas variáveis numéricas e calcule a soma delas"",
+                        ""Difficulty"": 0,
+                        ""StarterCode"": ""int numero1 = 10;\nint numero2 = 20;\n// Calcule a soma"",
+                        ""Hints"": [""Use o operador +"", ""Armazene o resultado em uma nova variável""]
+                    },
+                    {
+                        ""Title"": ""Concatenar Strings"",
+                        ""Description"": ""Crie duas variáveis string e concatene-as"",
+                        ""Difficulty"": 0,
+                        ""StarterCode"": ""string primeiro = \""Olá\"";\nstring segundo = \""Mundo\"";\n// Concatene as strings"",
+                        ""Hints"": [""Use o operador +"", ""Não esqueça do espaço entre as palavras""]
+                    }
+                ],
+                ""Summary"": ""Você aprendeu sobre variáveis e tipos de dados em C#""
             }",
             Prerequisites = "[\"Nenhum\"]"
         };
 
         context.Lessons.Add(lesson);
-        context.SaveChanges();
     }
 
     [Fact]
@@ -128,7 +142,7 @@ public class CoursesApiTests : IClassFixture<WebApplicationFactory<Program>>
     public async Task GetAllCourses_WithLevelIdFilter_ReturnsFilteredCourses()
     {
         // Arrange
-        using var scope = _factory.Services.CreateScope();
+        using var scope = _factory.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         var level = context.CurriculumLevels.First();
 
@@ -161,7 +175,7 @@ public class CoursesApiTests : IClassFixture<WebApplicationFactory<Program>>
     public async Task GetCourseById_ValidId_ReturnsOkWithCourseDetail()
     {
         // Arrange
-        using var scope = _factory.Services.CreateScope();
+        using var scope = _factory.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         var course = context.Courses.First();
 
@@ -197,7 +211,7 @@ public class CoursesApiTests : IClassFixture<WebApplicationFactory<Program>>
     public async Task GetCourseLessons_ValidId_ReturnsOkWithLessons()
     {
         // Arrange
-        using var scope = _factory.Services.CreateScope();
+        using var scope = _factory.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         var course = context.Courses.First();
 
@@ -231,7 +245,7 @@ public class CoursesApiTests : IClassFixture<WebApplicationFactory<Program>>
     public async Task GetLesson_ValidIds_ReturnsOkWithLessonDetail()
     {
         // Arrange
-        using var scope = _factory.Services.CreateScope();
+        using var scope = _factory.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         var lesson = context.Lessons.Include(l => l.Course).First();
 
@@ -254,7 +268,7 @@ public class CoursesApiTests : IClassFixture<WebApplicationFactory<Program>>
     public async Task GetLesson_InvalidLessonId_ReturnsNotFound()
     {
         // Arrange
-        using var scope = _factory.Services.CreateScope();
+        using var scope = _factory.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         var course = context.Courses.First();
         var invalidLessonId = Guid.NewGuid();
@@ -270,7 +284,7 @@ public class CoursesApiTests : IClassFixture<WebApplicationFactory<Program>>
     public async Task CompleteLesson_ValidIds_ReturnsOk()
     {
         // Arrange
-        using var scope = _factory.Services.CreateScope();
+        using var scope = _factory.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         var lesson = context.Lessons.First();
 
@@ -288,7 +302,7 @@ public class CoursesApiTests : IClassFixture<WebApplicationFactory<Program>>
     public async Task CompleteLesson_InvalidLessonId_ReturnsNotFound()
     {
         // Arrange
-        using var scope = _factory.Services.CreateScope();
+        using var scope = _factory.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         var course = context.Courses.First();
         var invalidLessonId = Guid.NewGuid();
@@ -322,7 +336,7 @@ public class CoursesApiTests : IClassFixture<WebApplicationFactory<Program>>
     public async Task GetCourseLessons_ReturnsLessonsOrderedByOrderIndex()
     {
         // Arrange
-        using var scope = _factory.Services.CreateScope();
+        using var scope = _factory.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         var course = context.Courses.First();
 
@@ -343,7 +357,7 @@ public class CoursesApiTests : IClassFixture<WebApplicationFactory<Program>>
     public async Task GetLesson_StructuredContentParsedCorrectly()
     {
         // Arrange
-        using var scope = _factory.Services.CreateScope();
+        using var scope = _factory.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         var lesson = context.Lessons.First();
 
@@ -360,3 +374,5 @@ public class CoursesApiTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.NotEmpty(result.StructuredContent.Theory);
     }
 }
+
+

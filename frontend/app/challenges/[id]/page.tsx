@@ -3,7 +3,14 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { challengesApi } from '@/lib/api/challenges';
-import { CodeEditor, CodeFile, ChallengeDetailSkeleton, AIFeedback } from '@/lib/components';
+import { 
+  CodeEditor, 
+  CodeFile, 
+  ChallengeDetailSkeleton, 
+  AIFeedback,
+  CountdownTimer,
+  TimeAttackLeaderboard 
+} from '@/lib/components';
 import { useAIFeedback } from '@/lib/hooks/useAIFeedback';
 import {
   ChallengeDetailResponse,
@@ -28,12 +35,22 @@ export default function ChallengeDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [showSubmissionHistory, setShowSubmissionHistory] = useState(false);
   const [showAIFeedback, setShowAIFeedback] = useState(false);
+  
+  // Time Attack state
+  const [isTimeAttackMode, setIsTimeAttackMode] = useState(false);
+  const [timeAttackStartTime, setTimeAttackStartTime] = useState<number | null>(null);
+  const [timeAttackElapsed, setTimeAttackElapsed] = useState(0);
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
+  const [leaderboardData, setLeaderboardData] = useState<any[]>([]);
+  const [userBestTime, setUserBestTime] = useState<any>(null);
 
   // Use the AI feedback hook
   const { feedback, isLoading: isLoadingFeedback, getFeedback, clearFeedback } = useAIFeedback();
 
   useEffect(() => {
     loadChallenge();
+    loadLeaderboard();
+    loadUserBestTime();
   }, [challengeId]);
 
   const loadChallenge = async () => {
@@ -59,6 +76,59 @@ export default function ChallengeDetailPage() {
     }
   };
 
+  const loadLeaderboard = async () => {
+    try {
+      const response = await fetch(`http://localhost:5003/api/challenges/${challengeId}/leaderboard`);
+      if (response.ok) {
+        const data = await response.json();
+        setLeaderboardData(data.leaderboard || []);
+      }
+    } catch (err) {
+      console.error('Error loading leaderboard:', err);
+    }
+  };
+
+  const loadUserBestTime = async () => {
+    try {
+      const userId = localStorage.getItem('user_id') || '';
+      const response = await fetch(`http://localhost:5003/api/challenges/${challengeId}/best-time?userId=${userId}`);
+      if (response.ok) {
+        const data = await response.json();
+        setUserBestTime(data);
+      }
+    } catch (err) {
+      console.error('Error loading user best time:', err);
+    }
+  };
+
+  const handleStartTimeAttack = () => {
+    setIsTimeAttackMode(true);
+    setTimeAttackStartTime(Date.now());
+    setTimeAttackElapsed(0);
+    setTestResults([]);
+    setSubmissionResult(null);
+    setOutput('');
+  };
+
+  const handleStopTimeAttack = () => {
+    setIsTimeAttackMode(false);
+    setTimeAttackStartTime(null);
+    setTimeAttackElapsed(0);
+  };
+
+  const handleTimeAttackTick = (remainingSeconds: number) => {
+    if (timeAttackStartTime && challenge) {
+      const elapsed = Math.floor((Date.now() - timeAttackStartTime) / 1000);
+      setTimeAttackElapsed(elapsed);
+    }
+  };
+
+  const handleTimeUp = () => {
+    setOutput('⏰ Tempo esgotado! Tente novamente.\n');
+    setIsTimeAttackMode(false);
+    setTimeAttackStartTime(null);
+  };
+
   const handleFileChange = (index: number, content: string) => {
     const newFiles = [...files];
     newFiles[index].content = content;
@@ -77,9 +147,17 @@ export default function ChallengeDetailPage() {
       // Get user ID from localStorage (set during login)
       const userId = localStorage.getItem('user_id') || '';
 
+      // Calculate completion time for Time Attack mode
+      let completionTimeSeconds = null;
+      if (isTimeAttackMode && timeAttackStartTime) {
+        completionTimeSeconds = Math.floor((Date.now() - timeAttackStartTime) / 1000);
+      }
+
       const response = await challengesApi.submitSolution(challengeId, {
         userId,
         code: files[activeFileIndex].content,
+        isTimeAttack: isTimeAttackMode,
+        completionTimeSeconds,
       });
 
       setSubmissionResult(response);
@@ -94,6 +172,20 @@ export default function ChallengeDetailPage() {
       if (response.allTestsPassed) {
         outputMessage += '✓ Todos os testes passaram!\n';
         outputMessage += `XP Ganho: ${response.xpAwarded}\n`;
+        
+        if (isTimeAttackMode && completionTimeSeconds) {
+          outputMessage += `\n⚡ TIME ATTACK COMPLETO!\n`;
+          outputMessage += `Tempo: ${Math.floor(completionTimeSeconds / 60)}:${(completionTimeSeconds % 60).toString().padStart(2, '0')}\n`;
+          if (response.timeAttackBonusXP) {
+            outputMessage += `Bonus XP: +${response.timeAttackBonusXP}\n`;
+          }
+          
+          // Stop time attack mode and reload leaderboard
+          setIsTimeAttackMode(false);
+          setTimeAttackStartTime(null);
+          loadLeaderboard();
+          loadUserBestTime();
+        }
       } else {
         outputMessage += '✗ Alguns testes falharam. Veja os detalhes abaixo.\n';
       }
@@ -188,14 +280,64 @@ export default function ChallengeDetailPage() {
             >
               {getDifficultyLabel(challenge.difficulty)}
             </span>
+            {challenge.supportsTimeAttack && (
+              <span className="px-3 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
+                ⚡ Time Attack
+              </span>
+            )}
           </div>
-          <button
-            onClick={() => setShowSubmissionHistory(!showSubmissionHistory)}
-            className="px-4 py-2 text-sm text-gray-700 hover:text-gray-900 border border-gray-300 rounded hover:bg-gray-50"
-          >
-            Histórico de Envios
-          </button>
+          
+          <div className="flex items-center gap-3">
+            {/* Time Attack Controls */}
+            {challenge.supportsTimeAttack && !isTimeAttackMode && (
+              <button
+                onClick={handleStartTimeAttack}
+                className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-purple-600 to-blue-600 rounded hover:from-purple-700 hover:to-blue-700 transition-all"
+              >
+                ⚡ Iniciar Time Attack
+              </button>
+            )}
+            
+            {isTimeAttackMode && (
+              <button
+                onClick={handleStopTimeAttack}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded hover:bg-red-700"
+              >
+                ✕ Cancelar Time Attack
+              </button>
+            )}
+            
+            {challenge.supportsTimeAttack && (
+              <button
+                onClick={() => setShowLeaderboard(!showLeaderboard)}
+                className="px-4 py-2 text-sm text-gray-700 hover:text-gray-900 border border-gray-300 rounded hover:bg-gray-50"
+              >
+                🏆 Leaderboard
+              </button>
+            )}
+            
+            <button
+              onClick={() => setShowSubmissionHistory(!showSubmissionHistory)}
+              className="px-4 py-2 text-sm text-gray-700 hover:text-gray-900 border border-gray-300 rounded hover:bg-gray-50"
+            >
+              Histórico de Envios
+            </button>
+          </div>
         </div>
+        
+        {/* Time Attack Timer */}
+        {isTimeAttackMode && challenge.timeAttackLimitSeconds && (
+          <div className="mt-4 flex justify-center">
+            <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg p-4 border-2 border-purple-200">
+              <CountdownTimer
+                initialSeconds={challenge.timeAttackLimitSeconds}
+                onTimeUp={handleTimeUp}
+                onTick={handleTimeAttackTick}
+                isPaused={isSubmitting}
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Main Content */}
@@ -354,6 +496,29 @@ export default function ChallengeDetailPage() {
               <p className="text-gray-600 text-center py-8">
                 Funcionalidade de histórico de envios em breve...
               </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Time Attack Leaderboard Modal */}
+      {showLeaderboard && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between bg-gradient-to-r from-purple-600 to-blue-600">
+              <h2 className="text-xl font-semibold text-white">Time Attack Leaderboard</h2>
+              <button
+                onClick={() => setShowLeaderboard(false)}
+                className="text-white hover:text-gray-200"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-80px)]">
+              <TimeAttackLeaderboard
+                entries={leaderboardData}
+                userBestTime={userBestTime}
+              />
             </div>
           </div>
         </div>

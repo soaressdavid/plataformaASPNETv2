@@ -31,6 +31,14 @@ public class RateLimitingMiddleware
 
     public async Task InvokeAsync(HttpContext context)
     {
+        // If Redis is not available, skip rate limiting (fail open)
+        if (_redis == null || !_redis.IsConnected)
+        {
+            _logger.LogWarning("Redis not available, skipping rate limiting");
+            await _next(context);
+            return;
+        }
+
         var db = _redis.GetDatabase();
         var identifier = GetClientIdentifier(context);
         var isAuthenticated = context.User?.Identity?.IsAuthenticated ?? false;

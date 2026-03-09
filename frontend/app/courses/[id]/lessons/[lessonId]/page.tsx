@@ -5,7 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import { coursesApi } from '@/lib/api';
 import type { LessonDetail, CourseDetail, Exercise } from '@/lib/types';
 import { Icons } from '@/lib/components/Icons';
-import { CodeEditor, CodeFile, AIFeedback, LessonContent, Breadcrumb } from '@/lib/components';
+import { CodeEditor, CodeFile, AIFeedback, LessonContent, Breadcrumb, SqlExecutor, TerminalExecutor, AzureSimulator } from '@/lib/components';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { useLessonProgress } from '@/lib/hooks/useLessonProgress';
 import { useAIFeedback } from '@/lib/hooks/useAIFeedback';
@@ -41,6 +41,56 @@ export default function LessonPage() {
   const [isRunning, setIsRunning] = useState(false);
   const [showAIFeedback, setShowAIFeedback] = useState(false);
   const { feedback, isLoading: isLoadingFeedback, getFeedback, clearFeedback } = useAIFeedback();
+
+  // Detectar tipo da aula
+  const detectLessonType = (): 'sql' | 'terminal' | 'azure' | 'csharp' => {
+    if (!lesson || !course) return 'csharp';
+    
+    const content = (lesson.title + ' ' + (lesson.content || '') + ' ' + course.title).toLowerCase();
+    
+    // Azure keywords (prioridade 1)
+    const azureKeywords = [
+      'azure', 'app service', 'azure functions', 'azure sql',
+      'azure storage', 'azure devops', 'resource group',
+      'azure portal', 'subscription', 'arm template'
+    ];
+    
+    // Terminal/Deploy keywords (prioridade 2)
+    const terminalKeywords = [
+      'deploy', 'deployment', 'ci/cd', 'pipeline', 'devops',
+      'docker', 'container', 'kubernetes', 'k8s',
+      'git', 'github actions', 'gitlab', 'jenkins',
+      'terminal', 'command line', 'cli', 'bash', 'shell',
+      'dotnet publish', 'build', 'release'
+    ];
+    
+    // SQL keywords (prioridade 3)
+    const sqlKeywords = [
+      'sql', 'database', 'banco de dados', 'select', 'insert', 'update', 'delete',
+      'query', 'consulta', 'tabela', 'table', 'join', 'where', 'entity framework',
+      'ef core', 'linq', 'migration', 'dbcontext', 'stored procedure', 'trigger'
+    ];
+    
+    // Verificar Azure primeiro
+    if (azureKeywords.some(keyword => content.includes(keyword))) {
+      return 'azure';
+    }
+    
+    // Verificar Terminal/Deploy
+    if (terminalKeywords.some(keyword => content.includes(keyword))) {
+      return 'terminal';
+    }
+    
+    // Verificar SQL
+    if (sqlKeywords.some(keyword => content.includes(keyword))) {
+      return 'sql';
+    }
+    
+    // Default: C#
+    return 'csharp';
+  };
+
+  const lessonType = detectLessonType();
 
   useEffect(() => {
     if (courseId && lessonId) {
@@ -446,51 +496,80 @@ export default function LessonPage() {
             )}
           </div>
 
-          {/* Right Column - Code Editor (Sticky) */}
+          {/* Right Column - Executor Contextual (Sticky) */}
           <div className="lg:sticky lg:top-20 lg:self-start">
             <div className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden flex flex-col" style={{ height: 'calc(100vh - 7rem)' }}>
               <div className="bg-gradient-to-r from-blue-600 to-purple-600 px-6 py-4 flex-shrink-0">
                 <div className="flex items-center gap-3">
-                  <Icons.Code className="w-6 h-6 text-white" />
-                  <h2 className="text-xl font-bold text-white">Praticar Código</h2>
+                  {lessonType === 'sql' && (
+                    <>
+                      <Icons.Database className="w-6 h-6 text-white" />
+                      <h2 className="text-xl font-bold text-white">Praticar SQL</h2>
+                    </>
+                  )}
+                  {lessonType === 'terminal' && (
+                    <>
+                      <Icons.Terminal className="w-6 h-6 text-white" />
+                      <h2 className="text-xl font-bold text-white">Terminal / Deploy</h2>
+                    </>
+                  )}
+                  {lessonType === 'azure' && (
+                    <>
+                      <div className="w-6 h-6 bg-white rounded flex items-center justify-center">
+                        <span className="text-blue-600 font-bold text-xs">Az</span>
+                      </div>
+                      <h2 className="text-xl font-bold text-white">Azure Portal</h2>
+                    </>
+                  )}
+                  {lessonType === 'csharp' && (
+                    <>
+                      <Icons.Code className="w-6 h-6 text-white" />
+                      <h2 className="text-xl font-bold text-white">Praticar Código</h2>
+                    </>
+                  )}
                 </div>
               </div>
               
               <div className="flex-1 min-h-0">
-                <CodeEditor
-                  files={files}
-                  activeFileIndex={activeFileIndex}
-                  onFileChange={(index, content) => {
-                    const newFiles = [...files];
-                    newFiles[index].content = content;
-                    setFiles(newFiles);
-                  }}
-                  onActiveFileChange={setActiveFileIndex}
-                  onGetFeedback={async () => {
-                    setShowAIFeedback(true);
-                    const context = `Aula: ${lesson?.title}\nConteúdo: ${lesson?.content?.substring(0, 200) || 'Conteúdo estruturado'}...`;
-                    await getFeedback(files[activeFileIndex].content, context);
-                  }}
-                  showAIFeedback={showAIFeedback}
-                  aiFeedbackPanel={
-                    <AIFeedback
-                      suggestions={feedback?.suggestions || []}
-                      overallScore={feedback?.overallScore || 0}
-                      securityIssues={feedback?.securityIssues || []}
-                      performanceIssues={feedback?.performanceIssues || []}
-                      isLoading={isLoadingFeedback}
-                      onClose={() => {
-                        setShowAIFeedback(false);
-                        clearFeedback();
-                      }}
-                    />
-                  }
-                  onRun={async () => {
-                    await handleRunCode(files[activeFileIndex].content);
-                  }}
-                  output={output}
-                  isRunning={isRunning}
-                />
+                {lessonType === 'sql' && <SqlExecutor />}
+                {lessonType === 'terminal' && <TerminalExecutor />}
+                {lessonType === 'azure' && <AzureSimulator />}
+                {lessonType === 'csharp' && (
+                  <CodeEditor
+                    files={files}
+                    activeFileIndex={activeFileIndex}
+                    onFileChange={(index, content) => {
+                      const newFiles = [...files];
+                      newFiles[index].content = content;
+                      setFiles(newFiles);
+                    }}
+                    onActiveFileChange={setActiveFileIndex}
+                    onGetFeedback={async () => {
+                      setShowAIFeedback(true);
+                      const context = `Aula: ${lesson?.title}\nConteúdo: ${lesson?.content?.substring(0, 200) || 'Conteúdo estruturado'}...`;
+                      await getFeedback(files[activeFileIndex].content, context);
+                    }}
+                    showAIFeedback={showAIFeedback}
+                    aiFeedbackPanel={
+                      <AIFeedback
+                        suggestions={feedback?.suggestions || []}
+                        overallScore={feedback?.overallScore || 0}
+                        securityIssues={feedback?.securityIssues || []}
+                        performanceIssues={feedback?.performanceIssues || []}
+                        isLoading={isLoadingFeedback}
+                        onClose={() => {
+                          setShowAIFeedback(false);
+                          clearFeedback();
+                        }}
+                      />
+                    }
+                    onRun={async () => {
+                      await handleRunCode(files[activeFileIndex].content);
+                    }}
+                    output={output}
+                    isRunning={isRunning}
+                  />
+                )}
               </div>
             </div>
           </div>

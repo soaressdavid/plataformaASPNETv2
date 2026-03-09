@@ -1,0 +1,171 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alertmanager-config
+  namespace: platform-saas
+data:
+  alertmanager.yml: |
+    global:
+      resolve_timeout: 5m
+      smtp_smarthost: 'smtp.gmail.com:587'
+      smtp_from: 'alerts@platform-saas.com'
+      smtp_auth_username: 'alerts@platform-saas.com'
+      smtp_auth_password: '${SMTP_PASSWORD}'
+      smtp_require_tls: true
+      slack_api_url: '${SLACK_WEBHOOK_URL}'
+
+    # Templates for notifications
+    templates:
+      - '/etc/alertmanager/templates/*.tmpl'
+
+    # Route tree for alerts
+    route:
+      group_by: ['alertname', 'cluster', 'service']
+      group_wait: 10s
+      group_interval: 10s
+      repeat_interval: 12h
+      receiver: 'default'
+      routes:
+        # Critical alerts go to both email and Slack immediately
+        - match:
+            severity: critical
+          receiver: 'critical-alerts'
+          continue: true
+
+        # Warning alerts go to Slack only
+        - match:
+            severity: warning
+          receiver: 'warning-alerts'
+
+        # Infrastructure alerts
+        - match:
+            component: infrastructure
+          receiver: 'infrastructure-team'
+
+        # API alerts
+        - match:
+            component: api
+          receiver: 'api-team'
+
+        # Database alerts
+        - match:
+            component: database
+          receiver: 'database-team'
+
+    # Inhibition rules to prevent alert spam
+    inhibit_rules:
+      # Inhibit warning if critical is firing
+      - source_match:
+          severity: 'critical'
+        target_match:
+          severity: 'warning'
+        equal: ['alertname', 'instance']
+
+      # Inhibit service down if pod is restarting
+      - source_match:
+          alertname: 'PodRestartingFrequently'
+        target_match:
+          alertname: 'ServiceDown'
+        equal: ['pod']
+
+    # Receivers configuration
+    receivers:
+      - name: 'default'
+        email_configs:
+          - to: 'platform-ops@platform-saas.com'
+            headers:
+              Subject: '[Platform Alert] {{ .GroupLabels.alertname }}'
+            html: |
+              <h2>Alert: {{ .GroupLabels.alertname }}</h2>
+              <p><strong>Severity:</strong> {{ .CommonLabels.severity }}</p>
+              <p><strong>Summary:</strong> {{ .CommonAnnotations.summary }}</p>
+              <p><strong>Description:</strong> {{ .CommonAnnotations.description }}</p>
+              <p><strong>Time:</strong> {{ .StartsAt }}</p>
+
+      - name: 'critical-alerts'
+        email_configs:
+          - to: 'platform-ops@platform-saas.com,platform-leads@platform-saas.com'
+            headers:
+              Subject: '[CRITICAL] {{ .GroupLabels.alertname }}'
+            html: |
+              <h1 style="color: red;">CRITICAL ALERT</h1>
+              <h2>{{ .GroupLabels.alertname }}</h2>
+              <p><strong>Summary:</strong> {{ .CommonAnnotations.summary }}</p>
+              <p><strong>Description:</strong> {{ .CommonAnnotations.description }}</p>
+              <p><strong>Component:</strong> {{ .CommonLabels.component }}</p>
+              <p><strong>Time:</strong> {{ .StartsAt }}</p>
+        slack_configs:
+          - channel: '#platform-critical-alerts'
+            title: 'CRITICAL: {{ .GroupLabels.alertname }}'
+            text: |
+              *Summary:* {{ .CommonAnnotations.summary }}
+              *Description:* {{ .CommonAnnotations.description }}
+              *Component:* {{ .CommonLabels.component }}
+              *Severity:* {{ .CommonLabels.severity }}
+            color: 'danger'
+            send_resolved: true
+
+      - name: 'warning-alerts'
+        slack_configs:
+          - channel: '#platform-alerts'
+            title: 'Warning: {{ .GroupLabels.alertname }}'
+            text: |
+              *Summary:* {{ .CommonAnnotations.summary }}
+              *Description:* {{ .CommonAnnotations.description }}
+              *Component:* {{ .CommonLabels.component }}
+            color: 'warning'
+            send_resolved: true
+
+      - name: 'infrastructure-team'
+        email_configs:
+          - to: 'infrastructure@platform-saas.com'
+            headers:
+              Subject: '[Infrastructure] {{ .GroupLabels.alertname }}'
+        slack_configs:
+          - channel: '#infrastructure-alerts'
+            title: '{{ .GroupLabels.alertname }}'
+            text: '{{ .CommonAnnotations.summary }}'
+
+      - name: 'api-team'
+        email_configs:
+          - to: 'api-team@platform-saas.com'
+            headers:
+              Subject: '[API] {{ .GroupLabels.alertname }}'
+        slack_configs:
+          - channel: '#api-alerts'
+            title: '{{ .GroupLabels.alertname }}'
+            text: '{{ .CommonAnnotations.summary }}'
+
+      - name: 'database-team'
+        email_configs:
+          - to: 'database-team@platform-saas.com'
+            headers:
+              Subject: '[Database] {{ .GroupLabels.alertname }}'
+        slack_configs:
+          - channel: '#database-alerts'
+            title: '{{ .GroupLabels.alertname }}'
+            text: '{{ .CommonAnnotations.summary }}'
+
+  notification-template.tmpl: |
+    {{ define "slack.default.title" }}
+    [{{ .Status | toUpper }}{{ if eq .Status "firing" }}:{{ .Alerts.Firing | len }}{{ end }}] {{ .GroupLabels.alertname }}
+    {{ end }}
+
+    {{ define "slack.default.text" }}
+    {{ range .Alerts }}
+    *Alert:* {{ .Labels.alertname }}
+    *Severity:* {{ .Labels.severity }}
+    *Summary:* {{ .Annotations.summary }}
+    *Description:* {{ .Annotations.description }}
+    {{ end }}
+    {{ end }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: alertmanager-secrets
+  namespace: platform-saas
+type: Opaque
+stringData:
+  smtp-password: "REPLACE_WITH_ACTUAL_SMTP_PASSWORD"
+  slack-webhook-url: "REPLACE_WITH_ACTUAL_SLACK_WEBHOOK_URL"

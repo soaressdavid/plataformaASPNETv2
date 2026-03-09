@@ -1,0 +1,40 @@
+{
+  "source": {
+    "host": "localhost",
+    "port": 5432,
+    "database": "aspnet_learning_platform",
+    "username": "platform_user",
+    "password": "your_postgresql_password",
+    "schema": "public"
+  },
+  "target": {
+    "server": "localhost,1433",
+    "database": "aspnet_learning_platform",
+    "username": "sa",
+    "password": "P@ssw0rd!2026#SecurePlatform",
+    "trustServerCertificate": true
+  },
+  "options": {
+    "backupBeforeMigration": true,
+    "verifyIntegrity": true,
+    "batchSize": 1000,
+    "parallelTables": 4,
+    "excludeTables": [
+      "__EFMigrationsHistory"
+    ],
+    "outputDirectory": "./migration-output",
+    "logDirectory": "./migration-logs"
+  },
+  "dataTypeMappings": {
+    "serial": "INT IDENTITY(1,1)",
+    "bigserial": "BIGINT IDENTITY(1,1)",
+    "boolean": "BIT",
+    "text": "NVARCHAR(MAX)",
+    "varchar": "NVARCHAR",
+    "timestamp": "DATETIME2",
+    "timestamptz": "DATETIMEOFFSET",
+    "uuid": "UNIQUEIDENTIFIER",
+    "json": "NVARCHAR(MAX)",
+    "jsonb": "NVARCHAR(MAX)"
+  }
+}

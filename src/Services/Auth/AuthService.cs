@@ -82,6 +82,7 @@ public class AuthService
 
     /// <summary>
     /// Authenticates a user with email and password.
+    /// Implements account lockout after 5 failed attempts (30 minutes lockout).
     /// </summary>
     /// <param name="email">The user's email address</param>
     /// <param name="password">The user's password</param>
@@ -106,10 +107,39 @@ public class AuthService
             return LoginResult.Failed("Invalid email or password");
         }
 
+        // Check if account is locked out
+        if (user.IsLockedOut)
+        {
+            var remainingMinutes = (int)(user.LockoutEnd!.Value - DateTime.UtcNow).TotalMinutes;
+            return LoginResult.LockedOut($"Account is locked due to too many failed login attempts. Try again in {remainingMinutes} minutes.");
+        }
+
         // Verify password
         if (!_passwordHasher.VerifyPassword(password, user.PasswordHash))
         {
+            // Increment failed login attempts
+            user.FailedLoginAttempts++;
+            user.UpdatedAt = DateTime.UtcNow;
+
+            // Lock account after 5 failed attempts
+            if (user.FailedLoginAttempts >= 5)
+            {
+                user.LockoutEnd = DateTime.UtcNow.AddMinutes(30);
+                await _userRepository.UpdateAsync(user);
+                return LoginResult.LockedOut("Account has been locked due to too many failed login attempts. Try again in 30 minutes.");
+            }
+
+            await _userRepository.UpdateAsync(user);
             return LoginResult.Failed("Invalid email or password");
+        }
+
+        // Successful login - reset failed attempts
+        if (user.FailedLoginAttempts > 0 || user.LockoutEnd.HasValue)
+        {
+            user.FailedLoginAttempts = 0;
+            user.LockoutEnd = null;
+            user.UpdatedAt = DateTime.UtcNow;
+            await _userRepository.UpdateAsync(user);
         }
 
         // Generate token
@@ -146,6 +176,7 @@ public record RegisterResult
 public record LoginResult
 {
     public bool Success { get; init; }
+    public bool IsLockedOut { get; init; }
     public Guid UserId { get; init; }
     public string Name { get; init; } = string.Empty;
     public string Email { get; init; } = string.Empty;
@@ -160,4 +191,7 @@ public record LoginResult
 
     public static LoginResult Failed(string errorMessage) =>
         new() { Success = false, ErrorMessage = errorMessage };
+
+    public static LoginResult LockedOut(string errorMessage) =>
+        new() { Success = false, IsLockedOut = true, ErrorMessage = errorMessage };
 }

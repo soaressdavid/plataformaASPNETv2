@@ -38,6 +38,9 @@ namespace Shared.Migrations
                     b.Property<int>("Difficulty")
                         .HasColumnType("int");
 
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
                     b.Property<string>("StarterCode")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -52,13 +55,15 @@ namespace Shared.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("Difficulty")
+                        .HasFilter("[IsDeleted] = 0");
+
                     b.ToTable("Challenges");
                 });
 
             modelBuilder.Entity("Shared.Entities.Course", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<DateTime>("CreatedAt")
@@ -72,6 +77,9 @@ namespace Shared.Migrations
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
 
                     b.Property<int>("LessonCount")
                         .HasColumnType("int");
@@ -107,7 +115,6 @@ namespace Shared.Migrations
             modelBuilder.Entity("Shared.Entities.CurriculumLevel", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<DateTime>("CreatedAt")
@@ -116,6 +123,9 @@ namespace Shared.Migrations
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
 
                     b.Property<int>("Number")
                         .HasColumnType("int");
@@ -153,6 +163,9 @@ namespace Shared.Migrations
                     b.Property<DateTime>("EnrolledAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
                     b.Property<DateTime?>("LastAccessedAt")
                         .HasColumnType("datetime2");
 
@@ -175,7 +188,6 @@ namespace Shared.Migrations
             modelBuilder.Entity("Shared.Entities.Lesson", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("Content")
@@ -201,6 +213,9 @@ namespace Shared.Migrations
                     b.Property<int>("EstimatedMinutes")
                         .HasColumnType("int");
 
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
                     b.Property<int>("OrderIndex")
                         .HasColumnType("int");
 
@@ -224,6 +239,9 @@ namespace Shared.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CreatedAt")
+                        .HasFilter("[IsDeleted] = 0");
+
                     b.HasIndex("CourseId", "OrderIndex");
 
                     b.ToTable("Lessons");
@@ -240,6 +258,9 @@ namespace Shared.Migrations
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
 
                     b.Property<Guid>("LessonId")
                         .HasColumnType("uniqueidentifier");
@@ -272,6 +293,9 @@ namespace Shared.Migrations
                     b.Property<int>("CurrentLevel")
                         .HasColumnType("int");
 
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
                     b.Property<DateTime>("LastActivityAt")
                         .HasColumnType("datetime2");
 
@@ -292,6 +316,8 @@ namespace Shared.Migrations
                     b.HasIndex("UserId")
                         .IsUnique();
 
+                    b.HasIndex("UserId", "CreatedAt");
+
                     b.ToTable("Progresses");
                 });
 
@@ -307,6 +333,9 @@ namespace Shared.Migrations
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
 
                     b.Property<Guid?>("LevelId")
                         .HasColumnType("uniqueidentifier");
@@ -365,6 +394,9 @@ namespace Shared.Migrations
                     b.Property<bool>("IsCompleted")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
                     b.Property<Guid>("ProjectId")
                         .HasColumnType("uniqueidentifier");
 
@@ -400,6 +432,9 @@ namespace Shared.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
                     b.Property<bool>("Passed")
                         .HasColumnType("bit");
 
@@ -416,6 +451,8 @@ namespace Shared.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("ChallengeId");
+
+                    b.HasIndex("CreatedAt");
 
                     b.HasIndex("UserId", "ChallengeId");
 
@@ -441,6 +478,9 @@ namespace Shared.Migrations
                     b.Property<string>("Input")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
 
                     b.Property<bool>("IsHidden")
                         .HasColumnType("bit");
@@ -472,6 +512,9 @@ namespace Shared.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)");
 
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -486,8 +529,14 @@ namespace Shared.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CreatedAt");
+
                     b.HasIndex("Email")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.HasIndex("Name")
+                        .HasFilter("[IsDeleted] = 0");
 
                     b.ToTable("Users");
                 });

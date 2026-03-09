@@ -1,0 +1,212 @@
+---
+# Application Insights Configuration for Kubernetes
+# This file contains the configuration for Application Insights telemetry
+
+apiVersion: v1
+kind: Secret
+metadata:
+  name: appinsights-secret
+  namespace: platform-saas
+type: Opaque
+stringData:
+  # Replace with your actual Application Insights connection string
+  connection-string: "InstrumentationKey=00000000-0000-0000-0000-000000000000;IngestionEndpoint=https://eastus-8.in.applicationinsights.azure.com/;LiveEndpoint=https://eastus.livediagnostics.monitor.azure.com/"
+
+---
+# ConfigMap for Application Insights settings
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: appinsights-config
+  namespace: platform-saas
+data:
+  # Application Insights settings
+  ApplicationInsights__EnableAdaptiveSampling: "true"
+  ApplicationInsights__EnableQuickPulseMetricStream: "true"
+  ApplicationInsights__EnablePerformanceCounterCollection: "true"
+  ApplicationInsights__EnableDependencyTracking: "true"
+  ApplicationInsights__EnableEventCounterCollection: "true"
+  
+  # Sampling settings
+  ApplicationInsights__SamplingSettings__MaxTelemetryItemsPerSecond: "5"
+  ApplicationInsights__SamplingSettings__EvaluationInterval: "00:00:15"
+  ApplicationInsights__SamplingSettings__InitialSamplingPercentage: "100.0"
+  ApplicationInsights__SamplingSettings__MinSamplingPercentage: "0.1"
+  ApplicationInsights__SamplingSettings__MaxSamplingPercentage: "100.0"
+
+---
+# Example: Auth Service with Application Insights
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth-service
+  namespace: platform-saas
+  labels:
+    app: auth-service
+    version: v1
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: auth-service
+  template:
+    metadata:
+      labels:
+        app: auth-service
+        version: v1
+      annotations:
+        # Enable Application Insights auto-instrumentation (if using agent)
+        instrumentation.opentelemetry.io/inject-dotnet: "true"
+    spec:
+      containers:
+      - name: auth-service
+        image: platform-saas/auth-service:latest
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        # Application Insights connection string from secret
+        - name: ApplicationInsights__ConnectionString
+          valueFrom:
+            secretKeyRef:
+              name: appinsights-secret
+              key: connection-string
+        
+        # Service name for telemetry
+        - name: SERVICE_NAME
+          value: "AuthService"
+        
+        # Environment
+        - name: ASPNETCORE_ENVIRONMENT
+          value: "Production"
+        
+        # Load Application Insights settings from ConfigMap
+        envFrom:
+        - configMapRef:
+            name: appinsights-config
+        
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        
+        livenessProbe:
+          httpGet:
+            path: /health/live
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        
+        readinessProbe:
+          httpGet:
+            path: /health/ready
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 5
+
+---
+# Example: Code Executor Service with Application Insights
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: code-executor-service
+  namespace: platform-saas
+  labels:
+    app: code-executor-service
+    version: v1
+spec:
+  replicas: 5
+  selector:
+    matchLabels:
+      app: code-executor-service
+  template:
+    metadata:
+      labels:
+        app: code-executor-service
+        version: v1
+    spec:
+      containers:
+      - name: code-executor-service
+        image: platform-saas/code-executor-service:latest
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        - name: ApplicationInsights__ConnectionString
+          valueFrom:
+            secretKeyRef:
+              name: appinsights-secret
+              key: connection-string
+        
+        - name: SERVICE_NAME
+          value: "CodeExecutorService"
+        
+        - name: ASPNETCORE_ENVIRONMENT
+          value: "Production"
+        
+        envFrom:
+        - configMapRef:
+            name: appinsights-config
+        
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+
+---
+# Example: API Gateway with Application Insights
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-gateway
+  namespace: platform-saas
+  labels:
+    app: api-gateway
+    version: v1
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: api-gateway
+  template:
+    metadata:
+      labels:
+        app: api-gateway
+        version: v1
+    spec:
+      containers:
+      - name: api-gateway
+        image: platform-saas/api-gateway:latest
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        - name: ApplicationInsights__ConnectionString
+          valueFrom:
+            secretKeyRef:
+              name: appinsights-secret
+              key: connection-string
+        
+        - name: SERVICE_NAME
+          value: "ApiGateway"
+        
+        - name: ASPNETCORE_ENVIRONMENT
+          value: "Production"
+        
+        envFrom:
+        - configMapRef:
+            name: appinsights-config
+        
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"

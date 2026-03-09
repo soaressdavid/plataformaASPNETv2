@@ -1,0 +1,225 @@
+# Pod Security Standards for Production
+# Using Pod Security Admission (PSA) labels on namespaces
+
+---
+# Restricted security for most services
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: platform-saas-prod
+  labels:
+    name: platform-saas
+    environment: production
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+
+---
+# Pod Security Policy for Code Executor (requires privileged for Docker-in-Docker)
+apiVersion: policy/v1beta1
+kind: PodSecurityPolicy
+metadata:
+  name: code-executor-psp
+  annotations:
+    seccomp.security.alpha.kubernetes.io/allowedProfileNames: 'runtime/default'
+    apparmor.security.beta.kubernetes.io/allowedProfileNames: 'runtime/default'
+spec:
+  privileged: true  # Required for Docker socket access
+  allowPrivilegeEscalation: true
+  requiredDropCapabilities:
+    - ALL
+  volumes:
+    - 'configMap'
+    - 'emptyDir'
+    - 'projected'
+    - 'secret'
+    - 'downwardAPI'
+    - 'hostPath'  # Required for Docker socket
+  allowedHostPaths:
+    - pathPrefix: "/var/run/docker.sock"
+      readOnly: false
+  hostNetwork: false
+  hostIPC: false
+  hostPID: false
+  runAsUser:
+    rule: 'RunAsAny'
+  seLinux:
+    rule: 'RunAsAny'
+  supplementalGroups:
+    rule: 'RunAsAny'
+  fsGroup:
+    rule: 'RunAsAny'
+  readOnlyRootFilesystem: false
+
+---
+# Pod Security Policy for SQL Executor (requires privileged for container management)
+apiVersion: policy/v1beta1
+kind: PodSecurityPolicy
+metadata:
+  name: sql-executor-psp
+  annotations:
+    seccomp.security.alpha.kubernetes.io/allowedProfileNames: 'runtime/default'
+    apparmor.security.beta.kubernetes.io/allowedProfileNames: 'runtime/default'
+spec:
+  privileged: true  # Required for SQL container management
+  allowPrivilegeEscalation: true
+  requiredDropCapabilities:
+    - ALL
+  volumes:
+    - 'configMap'
+    - 'emptyDir'
+    - 'projected'
+    - 'secret'
+    - 'downwardAPI'
+    - 'hostPath'
+  allowedHostPaths:
+    - pathPrefix: "/var/run/docker.sock"
+      readOnly: false
+  hostNetwork: false
+  hostIPC: false
+  hostPID: false
+  runAsUser:
+    rule: 'RunAsAny'
+  seLinux:
+    rule: 'RunAsAny'
+  supplementalGroups:
+    rule: 'RunAsAny'
+  fsGroup:
+    rule: 'RunAsAny'
+  readOnlyRootFilesystem: false
+
+---
+# Restricted Pod Security Policy for standard services
+apiVersion: policy/v1beta1
+kind: PodSecurityPolicy
+metadata:
+  name: restricted-psp
+  annotations:
+    seccomp.security.alpha.kubernetes.io/allowedProfileNames: 'runtime/default'
+    apparmor.security.beta.kubernetes.io/allowedProfileNames: 'runtime/default'
+spec:
+  privileged: false
+  allowPrivilegeEscalation: false
+  requiredDropCapabilities:
+    - ALL
+  volumes:
+    - 'configMap'
+    - 'emptyDir'
+    - 'projected'
+    - 'secret'
+    - 'downwardAPI'
+    - 'persistentVolumeClaim'
+  hostNetwork: false
+  hostIPC: false
+  hostPID: false
+  runAsUser:
+    rule: 'MustRunAsNonRoot'
+  seLinux:
+    rule: 'RunAsAny'
+  supplementalGroups:
+    rule: 'RunAsAny'
+  fsGroup:
+    rule: 'RunAsAny'
+  readOnlyRootFilesystem: true
+
+---
+# ClusterRole for using code-executor PSP
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: code-executor-psp-user
+rules:
+- apiGroups: ['policy']
+  resources: ['podsecuritypolicies']
+  verbs: ['use']
+  resourceNames:
+  - code-executor-psp
+
+---
+# RoleBinding for code-executor PSP
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: code-executor-psp-binding
+  namespace: platform-saas-prod
+roleRef:
+  kind: ClusterRole
+  name: code-executor-psp-user
+  apiGroup: rbac.authorization.k8s.io
+subjects:
+- kind: ServiceAccount
+  name: code-executor-sa
+  namespace: platform-saas-prod
+
+---
+# ClusterRole for using sql-executor PSP
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: sql-executor-psp-user
+rules:
+- apiGroups: ['policy']
+  resources: ['podsecuritypolicies']
+  verbs: ['use']
+  resourceNames:
+  - sql-executor-psp
+
+---
+# RoleBinding for sql-executor PSP
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: sql-executor-psp-binding
+  namespace: platform-saas-prod
+roleRef:
+  kind: ClusterRole
+  name: sql-executor-psp-user
+  apiGroup: rbac.authorization.k8s.io
+subjects:
+- kind: ServiceAccount
+  name: sql-executor-sa
+  namespace: platform-saas-prod
+
+---
+# ClusterRole for using restricted PSP
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: restricted-psp-user
+rules:
+- apiGroups: ['policy']
+  resources: ['podsecuritypolicies']
+  verbs: ['use']
+  resourceNames:
+  - restricted-psp
+
+---
+# RoleBinding for all other services to use restricted PSP
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: restricted-psp-binding
+  namespace: platform-saas-prod
+roleRef:
+  kind: ClusterRole
+  name: restricted-psp-user
+  apiGroup: rbac.authorization.k8s.io
+subjects:
+- kind: ServiceAccount
+  name: api-gateway-sa
+  namespace: platform-saas-prod
+- kind: ServiceAccount
+  name: gamification-sa
+  namespace: platform-saas-prod
+- kind: ServiceAccount
+  name: ai-tutor-sa
+  namespace: platform-saas-prod
+- kind: ServiceAccount
+  name: notification-sa
+  namespace: platform-saas-prod
+- kind: ServiceAccount
+  name: analytics-sa
+  namespace: platform-saas-prod
+- kind: ServiceAccount
+  name: telemetry-sa
+  namespace: platform-saas-prod

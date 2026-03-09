@@ -1,0 +1,255 @@
+# Elasticsearch Cluster for Log Aggregation
+# 3-node cluster for high availability
+# Supports centralized logging for all microservices
+# Requirements: 52.9, 52.13
+
+---
+# Elasticsearch ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: elasticsearch-config
+  namespace: platform-saas-prod
+data:
+  elasticsearch.yml: |
+    cluster.name: platform-saas-logs
+    network.host: 0.0.0.0
+    discovery.seed_hosts: ["elasticsearch-0.elasticsearch-headless", "elasticsearch-1.elasticsearch-headless", "elasticsearch-2.elasticsearch-headless"]
+    cluster.initial_master_nodes: ["elasticsearch-0", "elasticsearch-1", "elasticsearch-2"]
+    xpack.security.enabled: false
+    xpack.monitoring.enabled: true
+    indices.lifecycle.history_index_enabled: true
+    # Log retention policy - 90 days
+    indices.lifecycle.poll_interval: "10m"
+
+---
+# Elasticsearch Headless Service for StatefulSet
+apiVersion: v1
+kind: Service
+metadata:
+  name: elasticsearch-headless
+  namespace: platform-saas-prod
+  labels:
+    app: elasticsearch
+spec:
+  clusterIP: None
+  selector:
+    app: elasticsearch
+  ports:
+  - name: transport
+    port: 9300
+    protocol: TCP
+
+---
+# Elasticsearch Service for external access
+apiVersion: v1
+kind: Service
+metadata:
+  name: elasticsearch
+  namespace: platform-saas-prod
+  labels:
+    app: elasticsearch
+spec:
+  type: ClusterIP
+  selector:
+    app: elasticsearch
+  ports:
+  - name: http
+    port: 9200
+    targetPort: 9200
+    protocol: TCP
+  - name: transport
+    port: 9300
+    targetPort: 9300
+    protocol: TCP
+
+---
+# Elasticsearch StatefulSet - 3 nodes for HA
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: elasticsearch
+  namespace: platform-saas-prod
+  labels:
+    app: elasticsearch
+spec:
+  serviceName: elasticsearch-headless
+  replicas: 3
+  selector:
+    matchLabels:
+      app: elasticsearch
+  template:
+    metadata:
+      labels:
+        app: elasticsearch
+    spec:
+      serviceAccountName: monitoring-sa
+      initContainers:
+      # Increase vm.max_map_count for Elasticsearch
+      - name: increase-vm-max-map
+        image: busybox:1.36
+        command: ["sysctl", "-w", "vm.max_map_count=262144"]
+        securityContext:
+          privileged: true
+      # Increase file descriptor limits
+      - name: increase-fd-ulimit
+        image: busybox:1.36
+        command: ["sh", "-c", "ulimit -n 65536"]
+        securityContext:
+          privileged: true
+      containers:
+      - name: elasticsearch
+        image: docker.elastic.co/elasticsearch/elasticsearch:8.11.3
+        ports:
+        - name: http
+          containerPort: 9200
+          protocol: TCP
+        - name: transport
+          containerPort: 9300
+          protocol: TCP
+        env:
+        - name: cluster.name
+          value: "platform-saas-logs"
+        - name: node.name
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: discovery.seed_hosts
+          value: "elasticsearch-0.elasticsearch-headless,elasticsearch-1.elasticsearch-headless,elasticsearch-2.elasticsearch-headless"
+        - name: cluster.initial_master_nodes
+          value: "elasticsearch-0,elasticsearch-1,elasticsearch-2"
+        - name: ES_JAVA_OPTS
+          value: "-Xms2g -Xmx2g"
+        - name: xpack.security.enabled
+          value: "false"
+        - name: xpack.monitoring.enabled
+          value: "true"
+        resources:
+          requests:
+            memory: "3Gi"
+            cpu: "1000m"
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+        volumeMounts:
+        - name: data
+          mountPath: /usr/share/elasticsearch/data
+        - name: config
+          mountPath: /usr/share/elasticsearch/config/elasticsearch.yml
+          subPath: elasticsearch.yml
+        livenessProbe:
+          httpGet:
+            path: /_cluster/health
+            port: 9200
+          initialDelaySeconds: 90
+          periodSeconds: 30
+          timeoutSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /_cluster/health?wait_for_status=yellow&timeout=5s
+            port: 9200
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 10
+      volumes:
+      - name: config
+        configMap:
+          name: elasticsearch-config
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: standard
+      resources:
+        requests:
+          storage: 50Gi
+
+---
+# Index Lifecycle Management Policy for 90-day retention
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: elasticsearch-ilm-setup
+  namespace: platform-saas-prod
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: setup-ilm
+        image: curlimages/curl:8.5.0
+        command:
+        - sh
+        - -c
+        - |
+          # Wait for Elasticsearch to be ready
+          until curl -s http://elasticsearch:9200/_cluster/health | grep -q '"status":"green"\|"status":"yellow"'; do
+            echo "Waiting for Elasticsearch..."
+            sleep 10
+          done
+          
+          # Create ILM policy for 90-day retention
+          curl -X PUT "http://elasticsearch:9200/_ilm/policy/logs-90day-retention" \
+            -H 'Content-Type: application/json' \
+            -d '{
+              "policy": {
+                "phases": {
+                  "hot": {
+                    "min_age": "0ms",
+                    "actions": {
+                      "rollover": {
+                        "max_size": "50gb",
+                        "max_age": "1d"
+                      }
+                    }
+                  },
+                  "warm": {
+                    "min_age": "7d",
+                    "actions": {
+                      "shrink": {
+                        "number_of_shards": 1
+                      },
+                      "forcemerge": {
+                        "max_num_segments": 1
+                      }
+                    }
+                  },
+                  "delete": {
+                    "min_age": "90d",
+                    "actions": {
+                      "delete": {}
+                    }
+                  }
+                }
+              }
+            }'
+          
+          # Create index template for logs
+          curl -X PUT "http://elasticsearch:9200/_index_template/logs-template" \
+            -H 'Content-Type: application/json' \
+            -d '{
+              "index_patterns": ["logs-*"],
+              "template": {
+                "settings": {
+                  "number_of_shards": 3,
+                  "number_of_replicas": 1,
+                  "index.lifecycle.name": "logs-90day-retention",
+                  "index.lifecycle.rollover_alias": "logs"
+                },
+                "mappings": {
+                  "properties": {
+                    "@timestamp": { "type": "date" },
+                    "level": { "type": "keyword" },
+                    "message": { "type": "text" },
+                    "service": { "type": "keyword" },
+                    "correlationId": { "type": "keyword" },
+                    "userId": { "type": "keyword" },
+                    "exception": { "type": "text" },
+                    "properties": { "type": "object" }
+                  }
+                }
+              }
+            }'
+          
+          echo "ILM policy and index template created successfully"

@@ -10,8 +10,9 @@ data:
   POSTGRES_DB: "aspnet_learning_platform"
   
   # Redis Configuration
-  REDIS_HOST: "redis-service"
+  REDIS_HOST: "redis-cluster-service"
   REDIS_PORT: "6379"
+  REDIS_CONNECTION_STRING: "redis-cluster-service.aspnet-learning-platform.svc.cluster.local:6379"
   
   # RabbitMQ Configuration
   RABBITMQ_HOST: "rabbitmq-service"
@@ -22,8 +23,12 @@ data:
   COURSE_SERVICE_URL: "http://course-service:8080"
   CHALLENGE_SERVICE_URL: "http://challenge-service:8080"
   PROGRESS_SERVICE_URL: "http://progress-service:8080"
+  GAMIFICATION_SERVICE_URL: "http://gamification-service:8080"
   AITUTOR_SERVICE_URL: "http://aitutor-service:8080"
   EXECUTION_SERVICE_URL: "http://execution-service:8080"
+  SQLEXECUTOR_SERVICE_URL: "http://sqlexecutor-service:8080"
+  NOTIFICATION_SERVICE_URL: "http://notification-service:8080"
+  ANALYTICS_SERVICE_URL: "http://analytics-service:8080"
   
   # Application Settings
   ASPNETCORE_ENVIRONMENT: "Production"

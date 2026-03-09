@@ -100,6 +100,8 @@ app.MapGet("/api/challenges/{id}", (string id) =>
             category = "Lógica",
             timeLimit = "30 min",
             completed = false,
+            supportsTimeAttack = true,
+            timeAttackLimitSeconds = 900,
             starterCode = "public class Solution\n{\n    public void FizzBuzz(int n)\n    {\n        // Seu código aqui\n    }\n}",
             testCases = new[]
             {
@@ -118,6 +120,8 @@ app.MapGet("/api/challenges/{id}", (string id) =>
             category = "Strings",
             timeLimit = "20 min",
             completed = false,
+            supportsTimeAttack = true,
+            timeAttackLimitSeconds = 900,
             starterCode = "public class Solution\n{\n    public bool IsPalindrome(string s)\n    {\n        // Seu código aqui\n        return false;\n    }\n}",
             testCases = new[]
             {
@@ -132,6 +136,77 @@ app.MapGet("/api/challenges/{id}", (string id) =>
         return Results.Ok(challenge);
     }
     return Results.NotFound(new { message = "Challenge not found" });
+});
+
+// Time Attack leaderboard endpoint
+app.MapGet("/api/challenges/{id}/leaderboard", (string id) =>
+{
+    // Mock leaderboard data
+    var leaderboard = new[]
+    {
+        new { rank = 1, userName = "CodeMaster", completionTimeSeconds = 180, bonusXP = 50, submittedAt = DateTime.UtcNow.AddHours(-2) },
+        new { rank = 2, userName = "SpeedCoder", completionTimeSeconds = 240, bonusXP = 30, submittedAt = DateTime.UtcNow.AddHours(-5) },
+        new { rank = 3, userName = "QuickDev", completionTimeSeconds = 290, bonusXP = 10, submittedAt = DateTime.UtcNow.AddHours(-8) },
+    };
+    
+    return Results.Ok(new { leaderboard });
+});
+
+// User's best time endpoint
+app.MapGet("/api/challenges/{id}/best-time", (string id, string userId) =>
+{
+    // Mock best time data
+    var bestTime = new
+    {
+        completionTimeSeconds = 250,
+        bonusXP = 30,
+        submittedAt = DateTime.UtcNow.AddDays(-1),
+        rank = 15
+    };
+    
+    return Results.Ok(bestTime);
+});
+
+// Code Review submission endpoint
+app.MapPost("/api/challenges/{id}/code-review", (string id, Shared.DTOs.SubmitCodeReviewRequest request) =>
+{
+    // Mock challenge data with code review
+    var mockChallenge = new Shared.Entities.Challenge
+    {
+        Id = Guid.TryParse(id, out var guid) ? guid : Guid.NewGuid(),
+        Title = "Code Review Challenge",
+        Difficulty = Shared.Entities.Difficulty.Medium,
+        IsCodeReviewChallenge = true,
+        ExpectedIssues = System.Text.Json.JsonSerializer.Serialize(new[]
+        {
+            new Shared.DTOs.ExpectedBug
+            {
+                LineNumber = 5,
+                Description = "Null reference exception - missing null check",
+                Category = "NullReference",
+                Severity = "High"
+            },
+            new Shared.DTOs.ExpectedBug
+            {
+                LineNumber = 12,
+                Description = "Off-by-one error in loop condition",
+                Category = "LogicError",
+                Severity = "Medium"
+            },
+            new Shared.DTOs.ExpectedBug
+            {
+                LineNumber = 18,
+                Description = "SQL injection vulnerability",
+                Category = "SecurityIssue",
+                Severity = "High"
+            }
+        })
+    };
+
+    var validationService = new Challenge.Services.CodeReviewValidationService();
+    var result = validationService.ValidateCodeReview(mockChallenge, request.IdentifiedIssues);
+    
+    return Results.Ok(result);
 });
 
 app.Run();

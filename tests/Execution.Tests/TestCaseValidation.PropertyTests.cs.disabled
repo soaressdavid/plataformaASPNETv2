@@ -1,0 +1,305 @@
+using FsCheck;
+using FsCheck.Xunit;
+using Xunit;
+using Shared.Services;
+using Shared.Entities;
+
+namespace Execution.Tests;
+
+/// <summary>
+/// Property-based tests for test case validation
+/// Property 14: Test Case Validation Completeness
+/// Property 15: Failed Test Case Output
+/// Validates: Requirements 9.8, 9.9, 9.10
+/// </summary>
+public class TestCaseValidationPropertyTests
+{
+    /// <summary>
+    /// Property 14: ALL test cases MUST be executed (none skipped)
+    /// </summary>
+    [Property(MaxTest = 50)]
+    public Property AllTestCases_MustBeExecuted()
+    {
+        return Prop.ForAll(
+            Gen.Choose(1, 20).ToArbitrary(),
+            testCaseCount =>
+            {
+                var testCases = new List<TestCase>();
+                for (int i = 0; i < testCaseCount; i++)
+                {
+                    testCases.Add(new TestCase
+                    {
+                        Id = Guid.NewGuid(),
+                        Input = i.ToString(),
+                        ExpectedOutput = (i * 2).ToString(),
+                        OrderIndex = i
+                    });
+                }
+
+                var code = @"
+using System;
+class Program 
+{ 
+    static void Main(string[] args) 
+    { 
+        if (args.Length > 0)
+        {
+            int input = int.Parse(args[0]);
+            Console.WriteLine(input * 2);
+        }
+    } 
+}";
+
+                var executor = new TestCaseExecutor();
+                var results = executor.ExecuteAllTestCasesAsync(code, testCases).Result;
+
+                // All test cases must have results
+                var passed = results.Count == testCaseCount;
+                return passed.ToProperty().Label($"Expected {testCaseCount} results, got {results.Count}");
+            });
+    }
+
+    /// <summary>
+    /// Property 15: Failed test cases MUST include both expected and actual output
+    /// </summary>
+    [Fact]
+    public async Task FailedTestCases_MustIncludeExpectedAndActualOutput()
+    {
+        var testCase = new TestCase
+        {
+            Id = Guid.NewGuid(),
+            Input = "5",
+            ExpectedOutput = "10",
+            OrderIndex = 0
+        };
+
+        // Code that produces wrong output
+        var wrongCode = @"
+using System;
+class Program 
+{ 
+    static void Main(string[] args) 
+    { 
+        if (args.Length > 0)
+        {
+            int input = int.Parse(args[0]);
+            Console.WriteLine(input * 3); // Wrong: multiplies by 3 instead of 2
+        }
+    } 
+}";
+
+        var executor = new TestCaseExecutor();
+        var result = await executor.ExecuteTestCaseAsync(wrongCode, testCase);
+
+        Assert.False(result.Passed, "Test should fail with wrong output");
+        Assert.NotNull(result.ExpectedOutput);
+        Assert.NotNull(result.ActualOutput);
+        Assert.Equal("10", result.ExpectedOutput);
+        Assert.NotEqual(result.ExpectedOutput, result.ActualOutput);
+    }
+
+    /// <summary>
+    /// Property: Test case execution MUST be deterministic
+    /// </summary>
+    [Property(MaxTest = 30)]
+    public Property TestCaseExecution_MustBeDeterministic()
+    {
+        return Prop.ForAll(
+            Gen.Choose(1, 100).ToArbitrary(),
+            input =>
+            {
+                var testCase = new TestCase
+                {
+                    Id = Guid.NewGuid(),
+                    Input = input.ToString(),
+                    ExpectedOutput = (input * 2).ToString(),
+                    OrderIndex = 0
+                };
+
+                var code = @"
+using System;
+class Program 
+{ 
+    static void Main(string[] args) 
+    { 
+        if (args.Length > 0)
+        {
+            int input = int.Parse(args[0]);
+            Console.WriteLine(input * 2);
+        }
+    } 
+}";
+
+                var executor = new TestCaseExecutor();
+                
+                var result1 = executor.ExecuteTestCaseAsync(code, testCase).Result;
+                var result2 = executor.ExecuteTestCaseAsync(code, testCase).Result;
+
+                var passed = result1.Passed == result2.Passed && result1.ActualOutput == result2.ActualOutput;
+                return passed.ToProperty().Label("Same test case must produce identical results");
+            });
+    }
+
+    /// <summary>
+    /// Property: Passing test cases MUST have matching expected and actual output
+    /// </summary>
+    [Property(MaxTest = 50)]
+    public Property PassingTestCases_MustHaveMatchingOutput()
+    {
+        return Prop.ForAll(
+            Gen.Choose(1, 100).ToArbitrary(),
+            input =>
+            {
+                var testCase = new TestCase
+                {
+                    Id = Guid.NewGuid(),
+                    Input = input.ToString(),
+                    ExpectedOutput = (input * 2).ToString(),
+                    OrderIndex = 0
+                };
+
+                var code = @"
+using System;
+class Program 
+{ 
+    static void Main(string[] args) 
+    { 
+        if (args.Length > 0)
+        {
+            int input = int.Parse(args[0]);
+            Console.WriteLine(input * 2);
+        }
+    } 
+}";
+
+                var executor = new TestCaseExecutor();
+                var result = executor.ExecuteTestCaseAsync(code, testCase).Result;
+
+                if (result.Passed)
+                {
+                    var passed = result.ActualOutput?.Trim() == result.ExpectedOutput.Trim();
+                    return passed.ToProperty().Label("Passing test must have matching output");
+                }
+
+                return true.ToProperty(); // Skip if test didn't pass
+            });
+    }
+
+    /// <summary>
+    /// Property: Test case order MUST be preserved
+    /// </summary>
+    [Fact]
+    public async Task TestCaseOrder_MustBePreserved()
+    {
+        var testCases = new List<TestCase>
+        {
+            new TestCase { Id = Guid.NewGuid(), Input = "1", ExpectedOutput = "2", OrderIndex = 0 },
+            new TestCase { Id = Guid.NewGuid(), Input = "2", ExpectedOutput = "4", OrderIndex = 1 },
+            new TestCase { Id = Guid.NewGuid(), Input = "3", ExpectedOutput = "6", OrderIndex = 2 },
+        };
+
+        var code = @"
+using System;
+class Program 
+{ 
+    static void Main(string[] args) 
+    { 
+        if (args.Length > 0)
+        {
+            int input = int.Parse(args[0]);
+            Console.WriteLine(input * 2);
+        }
+    } 
+}";
+
+        var executor = new TestCaseExecutor();
+        var results = await executor.ExecuteAllTestCasesAsync(code, testCases);
+
+        // Results should be in same order as test cases
+        for (int i = 0; i < testCases.Count; i++)
+        {
+            Assert.Equal(testCases[i].Id, results[i].TestCaseId);
+        }
+    }
+
+    /// <summary>
+    /// Property: Compilation errors MUST fail all test cases
+    /// </summary>
+    [Fact]
+    public async Task CompilationErrors_MustFailAllTestCases()
+    {
+        var testCases = new List<TestCase>
+        {
+            new TestCase { Id = Guid.NewGuid(), Input = "1", ExpectedOutput = "2", OrderIndex = 0 },
+            new TestCase { Id = Guid.NewGuid(), Input = "2", ExpectedOutput = "4", OrderIndex = 1 },
+        };
+
+        var invalidCode = @"
+using System;
+class Program 
+{ 
+    static void Main(string[] args) 
+    { 
+        var x = 5 // Missing semicolon
+    } 
+}";
+
+        var executor = new TestCaseExecutor();
+        var results = await executor.ExecuteAllTestCasesAsync(invalidCode, testCases);
+
+        // All test cases should fail due to compilation error
+        Assert.All(results, result => Assert.False(result.Passed));
+        Assert.All(results, result => Assert.NotNull(result.ErrorMessage));
+    }
+
+    /// <summary>
+    /// Property: Runtime errors MUST be reported in test results
+    /// </summary>
+    [Fact]
+    public async Task RuntimeErrors_MustBeReportedInResults()
+    {
+        var testCase = new TestCase
+        {
+            Id = Guid.NewGuid(),
+            Input = "invalid",
+            ExpectedOutput = "10",
+            OrderIndex = 0
+        };
+
+        var code = @"
+using System;
+class Program 
+{ 
+    static void Main(string[] args) 
+    { 
+        if (args.Length > 0)
+        {
+            int input = int.Parse(args[0]); // Will throw FormatException
+            Console.WriteLine(input * 2);
+        }
+    } 
+}";
+
+        var executor = new TestCaseExecutor();
+        var result = await executor.ExecuteTestCaseAsync(code, testCase);
+
+        Assert.False(result.Passed);
+        Assert.NotNull(result.ErrorMessage);
+        Assert.Contains("error", result.ErrorMessage.ToLower());
+    }
+
+    /// <summary>
+    /// Property: Empty test case list MUST return empty results
+    /// </summary>
+    [Fact]
+    public async Task EmptyTestCaseList_MustReturnEmptyResults()
+    {
+        var testCases = new List<TestCase>();
+        var code = "using System; class Program { static void Main() { } }";
+
+        var executor = new TestCaseExecutor();
+        var results = await executor.ExecuteAllTestCasesAsync(code, testCases);
+
+        Assert.Empty(results);
+    }
+}

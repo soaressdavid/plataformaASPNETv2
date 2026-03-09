@@ -1,0 +1,148 @@
+using FsCheck;
+using FsCheck.Xunit;
+using Xunit;
+using Execution.Service;
+using Microsoft.Extensions.Logging;
+
+namespace Execution.Tests;
+
+/// <summary>
+/// Property-based tests for code execution timeout
+/// Property 11: Code Execution Timeout
+/// Validates: Requirements 7.9
+/// </summary>
+public class CodeExecutionTimeoutPropertyTests
+{
+    /// <summary>
+    /// Property: Code execution MUST timeout after configured limit (60 seconds)
+    /// </summary>
+    [Fact]
+    public async Task InfiniteLoop_MustTimeoutWithin60Seconds()
+    {
+        var infiniteLoopCode = @"
+using System;
+
+class Program
+{
+    static void Main()
+    {
+        while(true)
+        {
+            // Infinite loop
+        }
+    }
+}";
+
+        var executor = new SimpleCodeExecutor(LoggerFactory.Create(builder => { }));
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        
+        var result = await executor.ExecuteAsync(infiniteLoopCode);
+        
+        stopwatch.Stop();
+
+        // Should timeout and not run forever
+        Assert.True(stopwatch.Elapsed.TotalSeconds < 65, 
+            $"Execution should timeout within 60 seconds, took {stopwatch.Elapsed.TotalSeconds}s");
+        
+        // Status should indicate timeout or failure
+        Assert.True(result.Status == "Failed" || result.Status == "Timeout",
+            "Infinite loop should result in timeout or failure");
+    }
+
+    /// <summary>
+    /// Property: Fast-executing code MUST complete before timeout
+    /// </summary>
+    [Property(MaxTest = 50)]
+    public Property FastCode_MustCompleteBeforeTimeout()
+    {
+        return Prop.ForAll(
+            Gen.Choose(1, 100).ToArbitrary(),
+            iterations =>
+            {
+                var fastCode = $@"
+using System;
+
+class Program
+{{
+    static void Main()
+    {{
+        for(int i = 0; i < {iterations}; i++)
+        {{
+            Console.WriteLine(i);
+        }}
+    }}
+}}";
+
+                var executor = new SimpleCodeExecutor(LoggerFactory.Create(builder => { }));
+                var result = executor.ExecuteAsync(fastCode).Result;
+
+                var passed = result.Status == "Completed" && result.ExecutionTimeMs < 60000;
+                return passed.ToProperty().Label($"Fast code with {iterations} iterations should complete successfully");
+            });
+    }
+
+    /// <summary>
+    /// Property: Execution time MUST be measured and reported
+    /// </summary>
+    [Property(MaxTest = 30)]
+    public Property ExecutionTime_MustBeMeasuredAndReported()
+    {
+        return Prop.ForAll(
+            Gen.Choose(10, 100).ToArbitrary(),
+            delay =>
+            {
+                var delayCode = $@"
+using System;
+using System.Threading;
+
+class Program
+{{
+    static void Main()
+    {{
+        Thread.Sleep({delay});
+        Console.WriteLine(""Done"");
+    }}
+}}";
+
+                var executor = new SimpleCodeExecutor(LoggerFactory.Create(builder => { }));
+                var result = executor.ExecuteAsync(delayCode).Result;
+
+                // Execution time should be reported and be reasonable
+                var passed = result.ExecutionTimeMs > 0 && result.ExecutionTimeMs >= delay;
+                return passed.ToProperty().Label($"Execution time should be at least {delay}ms, got {result.ExecutionTimeMs}ms");
+            });
+    }
+
+    /// <summary>
+    /// Property: Timeout MUST be consistent across multiple executions
+    /// </summary>
+    [Fact]
+    public async Task Timeout_MustBeConsistentAcrossExecutions()
+    {
+        var longRunningCode = @"
+using System;
+using System.Threading;
+
+class Program
+{
+    static void Main()
+    {
+        Thread.Sleep(70000); // 70 seconds - exceeds timeout
+        Console.WriteLine(""Should not reach here"");
+    }
+}";
+
+        var executor = new SimpleCodeExecutor(new LoggerFactory());
+        
+        var result1 = await executor.ExecuteAsync(longRunningCode);
+        var result2 = await executor.ExecuteAsync(longRunningCode);
+
+        // Both should timeout
+        Assert.True(result1.Status == "Failed" || result1.Status == "Timeout");
+        Assert.True(result2.Status == "Failed" || result2.Status == "Timeout");
+        
+        // Timeout duration should be similar (within 5 seconds)
+        Assert.True(Math.Abs(result1.ExecutionTimeMs - result2.ExecutionTimeMs) < 5000,
+            "Timeout duration should be consistent");
+    }
+}

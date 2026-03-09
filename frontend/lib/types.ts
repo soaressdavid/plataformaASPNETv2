@@ -180,6 +180,8 @@ export interface ChallengeDetailResponse {
   difficulty: Difficulty;
   starterCode: string;
   testCases: TestCasePreview[];
+  supportsTimeAttack?: boolean;
+  timeAttackLimitSeconds?: number;
 }
 
 export interface TestResult {
@@ -193,6 +195,8 @@ export interface TestResult {
 export interface SubmitSolutionRequest {
   userId: string;
   code: string;
+  isTimeAttack?: boolean;
+  completionTimeSeconds?: number;
 }
 
 export interface SubmitSolutionResponse {
@@ -200,6 +204,8 @@ export interface SubmitSolutionResponse {
   allTestsPassed: boolean;
   results: TestResult[];
   xpAwarded: number;
+  timeAttackBonusXP?: number;
+  completionTimeSeconds?: number;
 }
 
 // Progress types

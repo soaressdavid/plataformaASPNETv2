@@ -1,0 +1,277 @@
+# Kibana Deployment for Log Visualization and Analysis
+# Provides dashboards and search interface for logs
+# Requirements: 52.9, 52.13
+
+---
+# Kibana ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kibana-config
+  namespace: platform-saas-prod
+data:
+  kibana.yml: |
+    server.name: kibana
+    server.host: "0.0.0.0"
+    elasticsearch.hosts: ["http://elasticsearch:9200"]
+    monitoring.ui.container.elasticsearch.enabled: true
+    xpack.security.enabled: false
+    xpack.monitoring.enabled: true
+    
+    # Default index pattern
+    kibana.defaultAppId: "discover"
+    
+    # Logging configuration
+    logging.dest: stdout
+    logging.silent: false
+    logging.quiet: false
+    logging.verbose: false
+
+---
+# Kibana Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: kibana
+  namespace: platform-saas-prod
+  labels:
+    app: kibana
+spec:
+  type: ClusterIP
+  selector:
+    app: kibana
+  ports:
+  - name: http
+    port: 5601
+    targetPort: 5601
+    protocol: TCP
+
+---
+# Kibana Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kibana
+  namespace: platform-saas-prod
+  labels:
+    app: kibana
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kibana
+  template:
+    metadata:
+      labels:
+        app: kibana
+    spec:
+      serviceAccountName: monitoring-sa
+      containers:
+      - name: kibana
+        image: docker.elastic.co/kibana/kibana:8.11.3
+        ports:
+        - name: http
+          containerPort: 5601
+          protocol: TCP
+        env:
+        - name: ELASTICSEARCH_HOSTS
+          value: "http://elasticsearch:9200"
+        - name: SERVER_NAME
+          value: "kibana"
+        - name: SERVER_HOST
+          value: "0.0.0.0"
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        volumeMounts:
+        - name: config
+          mountPath: /usr/share/kibana/config/kibana.yml
+          subPath: kibana.yml
+        livenessProbe:
+          httpGet:
+            path: /api/status
+            port: 5601
+          initialDelaySeconds: 120
+          periodSeconds: 30
+          timeoutSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /api/status
+            port: 5601
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 10
+      volumes:
+      - name: config
+        configMap:
+          name: kibana-config
+
+---
+# Kibana Ingress (optional - for external access)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: kibana-ingress
+  namespace: platform-saas-prod
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - kibana.platform-saas.example.com
+    secretName: kibana-tls
+  rules:
+  - host: kibana.platform-saas.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: kibana
+            port:
+              number: 5601
+
+---
+# Kibana Dashboard Setup Job
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kibana-dashboard-setup
+  namespace: platform-saas-prod
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: setup-dashboards
+        image: curlimages/curl:8.5.0
+        command:
+        - sh
+        - -c
+        - |
+          # Wait for Kibana to be ready
+          until curl -s http://kibana:5601/api/status | grep -q '"level":"available"'; do
+            echo "Waiting for Kibana..."
+            sleep 10
+          done
+          
+          echo "Kibana is ready. Creating index patterns and dashboards..."
+          
+          # Create index pattern for all logs
+          curl -X POST "http://kibana:5601/api/saved_objects/index-pattern/logs-*" \
+            -H 'kbn-xsrf: true' \
+            -H 'Content-Type: application/json' \
+            -d '{
+              "attributes": {
+                "title": "logs-*",
+                "timeFieldName": "@timestamp"
+              }
+            }'
+          
+          # Set default index pattern
+          curl -X POST "http://kibana:5601/api/kibana/settings/defaultIndex" \
+            -H 'kbn-xsrf: true' \
+            -H 'Content-Type: application/json' \
+            -d '{"value": "logs-*"}'
+          
+          # Create saved search for errors
+          curl -X POST "http://kibana:5601/api/saved_objects/search/error-logs" \
+            -H 'kbn-xsrf: true' \
+            -H 'Content-Type: application/json' \
+            -d '{
+              "attributes": {
+                "title": "Error Logs",
+                "description": "All error level logs",
+                "columns": ["@timestamp", "service", "level", "message", "correlationId"],
+                "sort": [["@timestamp", "desc"]],
+                "kibanaSavedObjectMeta": {
+                  "searchSourceJSON": "{\"query\":{\"query\":\"level:ERROR\",\"language\":\"lucene\"},\"filter\":[],\"indexRefName\":\"kibanaSavedObjectMeta.searchSourceJSON.index\"}"
+                }
+              },
+              "references": [{
+                "name": "kibanaSavedObjectMeta.searchSourceJSON.index",
+                "type": "index-pattern",
+                "id": "logs-*"
+              }]
+            }'
+          
+          # Create visualization for log levels
+          curl -X POST "http://kibana:5601/api/saved_objects/visualization/log-levels-pie" \
+            -H 'kbn-xsrf: true' \
+            -H 'Content-Type: application/json' \
+            -d '{
+              "attributes": {
+                "title": "Log Levels Distribution",
+                "visState": "{\"type\":\"pie\",\"params\":{\"addLegend\":true,\"addTooltip\":true,\"isDonut\":true},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{}},{\"id\":\"2\",\"enabled\":true,\"type\":\"terms\",\"schema\":\"segment\",\"params\":{\"field\":\"level\",\"size\":10,\"order\":\"desc\",\"orderBy\":\"1\"}}]}",
+                "kibanaSavedObjectMeta": {
+                  "searchSourceJSON": "{\"query\":{\"query\":\"\",\"language\":\"lucene\"},\"filter\":[],\"indexRefName\":\"kibanaSavedObjectMeta.searchSourceJSON.index\"}"
+                }
+              },
+              "references": [{
+                "name": "kibanaSavedObjectMeta.searchSourceJSON.index",
+                "type": "index-pattern",
+                "id": "logs-*"
+              }]
+            }'
+          
+          # Create visualization for logs by service
+          curl -X POST "http://kibana:5601/api/saved_objects/visualization/logs-by-service" \
+            -H 'kbn-xsrf: true' \
+            -H 'Content-Type: application/json' \
+            -d '{
+              "attributes": {
+                "title": "Logs by Service",
+                "visState": "{\"type\":\"histogram\",\"params\":{\"addLegend\":true,\"addTimeMarker\":false,\"addTooltip\":true,\"defaultYExtents\":false,\"mode\":\"stacked\",\"scale\":\"linear\",\"setYExtents\":false,\"times\":[]},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{}},{\"id\":\"2\",\"enabled\":true,\"type\":\"date_histogram\",\"schema\":\"segment\",\"params\":{\"field\":\"@timestamp\",\"interval\":\"auto\",\"min_doc_count\":1}},{\"id\":\"3\",\"enabled\":true,\"type\":\"terms\",\"schema\":\"group\",\"params\":{\"field\":\"service\",\"size\":10,\"order\":\"desc\",\"orderBy\":\"1\"}}]}",
+                "kibanaSavedObjectMeta": {
+                  "searchSourceJSON": "{\"query\":{\"query\":\"\",\"language\":\"lucene\"},\"filter\":[],\"indexRefName\":\"kibanaSavedObjectMeta.searchSourceJSON.index\"}"
+                }
+              },
+              "references": [{
+                "name": "kibanaSavedObjectMeta.searchSourceJSON.index",
+                "type": "index-pattern",
+                "id": "logs-*"
+              }]
+            }'
+          
+          # Create main dashboard
+          curl -X POST "http://kibana:5601/api/saved_objects/dashboard/main-logs-dashboard" \
+            -H 'kbn-xsrf: true' \
+            -H 'Content-Type: application/json' \
+            -d '{
+              "attributes": {
+                "title": "Platform Logs Dashboard",
+                "description": "Main dashboard for platform logs",
+                "panelsJSON": "[{\"panelIndex\":\"1\",\"gridData\":{\"x\":0,\"y\":0,\"w\":24,\"h\":15,\"i\":\"1\"},\"version\":\"8.11.3\",\"panelRefName\":\"panel_1\"},{\"panelIndex\":\"2\",\"gridData\":{\"x\":24,\"y\":0,\"w\":24,\"h\":15,\"i\":\"2\"},\"version\":\"8.11.3\",\"panelRefName\":\"panel_2\"},{\"panelIndex\":\"3\",\"gridData\":{\"x\":0,\"y\":15,\"w\":48,\"h\":20,\"i\":\"3\"},\"version\":\"8.11.3\",\"panelRefName\":\"panel_3\"}]",
+                "timeRestore": false,
+                "kibanaSavedObjectMeta": {
+                  "searchSourceJSON": "{\"query\":{\"query\":\"\",\"language\":\"lucene\"},\"filter\":[]}"
+                }
+              },
+              "references": [
+                {
+                  "name": "panel_1",
+                  "type": "visualization",
+                  "id": "log-levels-pie"
+                },
+                {
+                  "name": "panel_2",
+                  "type": "visualization",
+                  "id": "logs-by-service"
+                },
+                {
+                  "name": "panel_3",
+                  "type": "search",
+                  "id": "error-logs"
+                }
+              ]
+            }'
+          
+          echo "Kibana dashboards created successfully"

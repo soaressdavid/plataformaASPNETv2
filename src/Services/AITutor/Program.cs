@@ -3,12 +3,25 @@ using AITutor.Service.Services;
 using Shared.Logging;
 using Shared.Metrics;
 using Shared.HealthChecks;
+using Shared.Configuration;
+using StackExchange.Redis;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Configure Serilog for centralized logging
 builder.ConfigureSerilog("AITutorService");
+
+// Configure Redis connection pooling for rate limiting
+// Validates: Requirements 22.1, 22.2, 22.3, 8.10
+var redisConfig = builder.Configuration.GetSection("Redis").Get<RedisConfiguration>() ?? new RedisConfiguration
+{
+    ConnectionString = builder.Configuration.GetConnectionString("Redis") 
+        ?? "redis-cluster-service.aspnet-learning-platform.svc.cluster.local:6379",
+    UseCluster = true
+};
+var redisConnection = RedisConnectionFactory.GetConnection(redisConfig);
+builder.Services.AddSingleton<IConnectionMultiplexer>(redisConnection);
 
 // Add services to the container.
 builder.Services.AddControllers();
@@ -28,6 +41,7 @@ builder.Services.AddHttpClient<IGroqApiClient, GroqApiClient>()
 
 // Register services
 builder.Services.AddSingleton<CodeAnalysisPromptBuilder>();
+builder.Services.AddSingleton<IRateLimitCacheService, RateLimitCacheService>();
 builder.Services.AddScoped<IAITutorService, AITutorService>();
 
 // Add health checks

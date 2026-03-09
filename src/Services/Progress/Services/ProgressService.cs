@@ -105,7 +105,7 @@ public class ProgressService
     /// <summary>
     /// Gets the leaderboard with top students ranked by XP.
     /// </summary>
-    public async Task<List<LeaderboardEntry>> GetLeaderboardAsync(int count = 100)
+    public async Task<List<Shared.Interfaces.LeaderboardEntry>> GetLeaderboardAsync(int count = 100)
     {
         if (count <= 0)
             throw new ArgumentException("Count must be positive", nameof(count));

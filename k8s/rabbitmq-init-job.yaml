@@ -1,0 +1,257 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: rabbitmq-init
+  namespace: aspnet-learning-platform
+  labels:
+    app: rabbitmq-init
+spec:
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        app: rabbitmq-init
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: init
+        image: python:3.11-alpine
+        command:
+        - /bin/sh
+        - -c
+        - |
+          set -e
+          echo "Installing dependencies..."
+          pip install --no-cache-dir pika requests
+          
+          echo "Waiting for RabbitMQ to be ready..."
+          sleep 30
+          
+          python3 /scripts/init-topology.py
+        env:
+        - name: RABBITMQ_HOST
+          value: "rabbitmq-service"
+        - name: RABBITMQ_PORT
+          value: "5672"
+        - name: RABBITMQ_MANAGEMENT_PORT
+          value: "15672"
+        - name: RABBITMQ_USER
+          valueFrom:
+            secretKeyRef:
+              name: platform-secrets
+              key: RABBITMQ_USER
+        - name: RABBITMQ_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: platform-secrets
+              key: RABBITMQ_PASSWORD
+        volumeMounts:
+        - name: scripts
+          mountPath: /scripts
+        - name: topology
+          mountPath: /config
+      volumes:
+      - name: scripts
+        configMap:
+          name: rabbitmq-init-scripts
+          defaultMode: 0755
+      - name: topology
+        configMap:
+          name: rabbitmq-topology
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rabbitmq-init-scripts
+  namespace: aspnet-learning-platform
+data:
+  init-topology.py: |
+    #!/usr/bin/env python3
+    import json
+    import os
+    import sys
+    import time
+    import pika
+    import requests
+    from requests.auth import HTTPBasicAuth
+    
+    def wait_for_rabbitmq(host, port, user, password, max_retries=30):
+        """Wait for RabbitMQ to be ready"""
+        print(f"Waiting for RabbitMQ at {host}:{port}...")
+        
+        for i in range(max_retries):
+            try:
+                credentials = pika.PlainCredentials(user, password)
+                parameters = pika.ConnectionParameters(
+                    host=host,
+                    port=int(port),
+                    credentials=credentials,
+                    connection_attempts=3,
+                    retry_delay=2
+                )
+                connection = pika.BlockingConnection(parameters)
+                connection.close()
+                print("RabbitMQ is ready!")
+                return True
+            except Exception as e:
+                print(f"Attempt {i+1}/{max_retries}: RabbitMQ not ready yet - {e}")
+                time.sleep(5)
+        
+        print("ERROR: RabbitMQ did not become ready in time")
+        return False
+    
+    def create_exchanges(channel, exchanges):
+        """Create exchanges"""
+        print("\nCreating exchanges...")
+        for exchange in exchanges:
+            try:
+                channel.exchange_declare(
+                    exchange=exchange['name'],
+                    exchange_type=exchange['type'],
+                    durable=exchange['durable'],
+                    auto_delete=exchange['autoDelete']
+                )
+                print(f"✓ Created exchange: {exchange['name']} (type: {exchange['type']})")
+            except Exception as e:
+                print(f"✗ Failed to create exchange {exchange['name']}: {e}")
+                raise
+    
+    def create_queues(channel, queues):
+        """Create queues and bindings"""
+        print("\nCreating queues and bindings...")
+        for queue in queues:
+            try:
+                # Create queue with arguments
+                arguments = queue.get('arguments', {})
+                channel.queue_declare(
+                    queue=queue['name'],
+                    durable=queue['durable'],
+                    auto_delete=queue['autoDelete'],
+                    arguments=arguments
+                )
+                print(f"✓ Created queue: {queue['name']}")
+                
+                # Create bindings
+                for binding in queue.get('bindings', []):
+                    channel.queue_bind(
+                        queue=queue['name'],
+                        exchange=binding['exchange'],
+                        routing_key=binding['routingKey']
+                    )
+                    print(f"  ✓ Bound to {binding['exchange']} with key {binding['routingKey']}")
+                    
+            except Exception as e:
+                print(f"✗ Failed to create queue {queue['name']}: {e}")
+                raise
+    
+    def set_policies(host, port, user, password):
+        """Set RabbitMQ policies via Management API"""
+        print("\nSetting RabbitMQ policies...")
+        
+        base_url = f"http://{host}:{port}/api"
+        auth = HTTPBasicAuth(user, password)
+        
+        policies = [
+            {
+                "name": "ha-all",
+                "pattern": ".*",
+                "definition": {
+                    "ha-mode": "all",
+                    "ha-sync-mode": "automatic",
+                    "ha-sync-batch-size": 1
+                },
+                "priority": 0,
+                "apply-to": "queues"
+            },
+            {
+                "name": "message-ttl",
+                "pattern": "^(?!dlq).*",
+                "definition": {
+                    "message-ttl": 3600000
+                },
+                "priority": 1,
+                "apply-to": "queues"
+            }
+        ]
+        
+        for policy in policies:
+            try:
+                response = requests.put(
+                    f"{base_url}/policies/%2F/{policy['name']}",
+                    json=policy,
+                    auth=auth,
+                    timeout=10
+                )
+                if response.status_code in [201, 204]:
+                    print(f"✓ Created policy: {policy['name']}")
+                else:
+                    print(f"✗ Failed to create policy {policy['name']}: {response.status_code} - {response.text}")
+            except Exception as e:
+                print(f"✗ Failed to create policy {policy['name']}: {e}")
+    
+    def main():
+        # Get configuration from environment
+        host = os.getenv('RABBITMQ_HOST', 'localhost')
+        port = os.getenv('RABBITMQ_PORT', '5672')
+        mgmt_port = os.getenv('RABBITMQ_MANAGEMENT_PORT', '15672')
+        user = os.getenv('RABBITMQ_USER', 'guest')
+        password = os.getenv('RABBITMQ_PASSWORD', 'guest')
+        
+        print("=" * 60)
+        print("RabbitMQ Topology Initialization")
+        print("=" * 60)
+        print(f"Host: {host}")
+        print(f"Port: {port}")
+        print(f"Management Port: {mgmt_port}")
+        print(f"User: {user}")
+        print("=" * 60)
+        
+        # Wait for RabbitMQ to be ready
+        if not wait_for_rabbitmq(host, port, user, password):
+            sys.exit(1)
+        
+        # Load topology configuration
+        print("\nLoading topology configuration...")
+        with open('/config/topology.json', 'r') as f:
+            topology = json.load(f)
+        
+        print(f"Loaded {len(topology['exchanges'])} exchanges and {len(topology['queues'])} queues")
+        
+        # Connect to RabbitMQ
+        print("\nConnecting to RabbitMQ...")
+        credentials = pika.PlainCredentials(user, password)
+        parameters = pika.ConnectionParameters(
+            host=host,
+            port=int(port),
+            credentials=credentials
+        )
+        
+        try:
+            connection = pika.BlockingConnection(parameters)
+            channel = connection.channel()
+            print("✓ Connected to RabbitMQ")
+            
+            # Create exchanges
+            create_exchanges(channel, topology['exchanges'])
+            
+            # Create queues and bindings
+            create_queues(channel, topology['queues'])
+            
+            # Close connection
+            connection.close()
+            print("\n✓ Topology creation completed successfully")
+            
+            # Set policies via Management API
+            time.sleep(5)  # Wait a bit for management API
+            set_policies(host, mgmt_port, user, password)
+            
+            print("\n" + "=" * 60)
+            print("RabbitMQ initialization completed successfully!")
+            print("=" * 60)
+            
+        except Exception as e:
+            print(f"\n✗ ERROR: {e}")
+            sys.exit(1)
+    
+    if __name__ == '__main__':
+        main()

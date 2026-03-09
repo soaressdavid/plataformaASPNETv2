@@ -27,34 +27,43 @@ public class ProhibitedCodeScanner : IProhibitedCodeScanner
         (@"\bSystem\.Net\.Sockets\.", "Prohibited namespace: System.Net.Sockets"),
         (@"\bSystem\.Diagnostics\.Process\.", "Prohibited namespace: System.Diagnostics.Process"),
         
-        // File I/O operations
-        (@"\bFile\.(ReadAllText|WriteAllText|ReadAllLines|WriteAllLines|Delete|Create|Exists|Open|Copy|Move|Replace|AppendAllText|ReadAllBytes|WriteAllBytes)", "File system access is prohibited"),
-        (@"\bDirectory\.(GetFiles|Create|Delete|Exists|Move|GetDirectories|GetFileSystemEntries|EnumerateFiles)", "File system access is prohibited"),
-        (@"\bnew\s+FileStream\s*\(", "File system access is prohibited"),
-        (@"\bnew\s+StreamReader\s*\(", "File system access is prohibited"),
-        (@"\bnew\s+StreamWriter\s*\(", "File system access is prohibited"),
-        (@"\bFileInfo\b", "File system access is prohibited"),
-        (@"\bDirectoryInfo\b", "File system access is prohibited"),
-        (@"\bPath\.(GetFullPath|GetTempPath|GetTempFileName)", "File system access is prohibited"),
+        // File I/O operations (case-insensitive)
+        (@"(?i)\bFile\.(ReadAllText|WriteAllText|ReadAllLines|WriteAllLines|Delete|Create|Exists|Open|Copy|Move|Replace|AppendAllText|ReadAllBytes|WriteAllBytes)", "File system access is prohibited"),
+        (@"(?i)\bDirectory\.(GetFiles|Create|Delete|Exists|Move|GetDirectories|GetFileSystemEntries|EnumerateFiles)", "File system access is prohibited"),
+        (@"(?i)\bnew\s+FileStream\s*\(", "File system access is prohibited"),
+        (@"(?i)\bnew\s+StreamReader\s*\(", "File system access is prohibited"),
+        (@"(?i)\bnew\s+StreamWriter\s*\(", "File system access is prohibited"),
+        (@"(?i)\bFileInfo\b", "File system access is prohibited"),
+        (@"(?i)\bDirectoryInfo\b", "File system access is prohibited"),
+        (@"(?i)\bPath\.(GetFullPath|GetTempPath|GetTempFileName)", "File system access is prohibited"),
         
-        // Network operations
-        (@"\bnew\s+HttpClient\s*\(", "Network access is prohibited"),
-        (@"\bnew\s+WebClient\s*\(", "Network access is prohibited"),
-        (@"\bnew\s+Socket\s*\(", "Network access is prohibited"),
-        (@"\bnew\s+TcpClient\s*\(", "Network access is prohibited"),
-        (@"\bnew\s+UdpClient\s*\(", "Network access is prohibited"),
-        (@"\bnew\s+TcpListener\s*\(", "Network access is prohibited"),
-        (@"\bHttpClient\b", "Network access is prohibited"),
-        (@"\bWebClient\b", "Network access is prohibited"),
-        (@"\bSocket\b", "Network access is prohibited"),
-        (@"\bTcpClient\b", "Network access is prohibited"),
-        (@"\bUdpClient\b", "Network access is prohibited"),
+        // Network operations (case-insensitive)
+        (@"(?i)\bnew\s+HttpClient\s*\(", "Network access is prohibited"),
+        (@"(?i)\bnew\s+WebClient\s*\(", "Network access is prohibited"),
+        (@"(?i)\bnew\s+Socket\s*\(", "Network access is prohibited"),
+        (@"(?i)\bnew\s+TcpClient\s*\(", "Network access is prohibited"),
+        (@"(?i)\bnew\s+UdpClient\s*\(", "Network access is prohibited"),
+        (@"(?i)\bnew\s+TcpListener\s*\(", "Network access is prohibited"),
+        (@"(?i)\bHttpClient\b", "Network access is prohibited"),
+        (@"(?i)\bWebClient\b", "Network access is prohibited"),
+        (@"(?i)\bSocket\b", "Network access is prohibited"),
+        (@"(?i)\bTcpClient\b", "Network access is prohibited"),
+        (@"(?i)\bUdpClient\b", "Network access is prohibited"),
+        (@"(?i)\.GetAsync\s*\(", "Network access is prohibited"),
+        (@"(?i)\.PostAsync\s*\(", "Network access is prohibited"),
+        (@"(?i)\.PutAsync\s*\(", "Network access is prohibited"),
+        (@"(?i)\.DeleteAsync\s*\(", "Network access is prohibited"),
         
-        // Process operations
-        (@"\bProcess\.(Start|Kill|GetProcesses|GetCurrentProcess)", "Process spawning is prohibited"),
-        (@"\bnew\s+Process\s*\(", "Process spawning is prohibited"),
-        (@"\bnew\s+ProcessStartInfo\s*\(", "Process spawning is prohibited"),
-        (@"\bProcessStartInfo\b", "Process spawning is prohibited")
+        // Process operations (case-insensitive)
+        (@"(?i)\bProcess\.(Start|Kill|GetProcesses|GetCurrentProcess)", "Process spawning is prohibited"),
+        (@"(?i)\bnew\s+Process\s*\(", "Process spawning is prohibited"),
+        (@"(?i)\bnew\s+ProcessStartInfo\s*\(", "Process spawning is prohibited"),
+        (@"(?i)\bProcessStartInfo\b", "Process spawning is prohibited"),
+        
+        // Obfuscation detection - string concatenation of dangerous keywords
+        (@"""Process"".*""Start""", "Potential obfuscated process spawning"),
+        (@"""File"".*""Delete""", "Potential obfuscated file operation"),
+        (@"""Http"".*""Client""", "Potential obfuscated network access")
     };
 
     public CodeScanResult ScanCode(string code)

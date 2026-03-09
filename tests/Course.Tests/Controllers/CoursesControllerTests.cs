@@ -517,7 +517,7 @@ public class CoursesControllerTests : IDisposable
             },
             Exercises = new[]
             {
-                new { Title = "Exercise 1", Description = "Do this", Difficulty = "Easy", StarterCode = "// Start here", Hints = new[] { "Hint 1" } }
+                new { Title = "Exercise 1", Description = "Do this", Difficulty = 0, StarterCode = "// Start here", Hints = new[] { "Hint 1" } }
             },
             Summary = "Great job!"
         };

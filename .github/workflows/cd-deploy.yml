@@ -1,0 +1,348 @@
+name: CD - Deploy
+
+on:
+  push:
+    branches: [ main ]
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        type: choice
+        options:
+          - dev
+          - staging
+          - production
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ${{ github.repository }}
+
+jobs:
+  # Job 1: Build and push Docker images
+  build-images:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    
+    strategy:
+      matrix:
+        service:
+          - api-gateway
+          - auth-service
+          - code-executor
+          - sql-executor
+          - gamification-engine
+          - ai-tutor
+          - notification-service
+          - analytics-service
+          - frontend
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/${{ matrix.service }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix={{branch}}-
+      
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/${{ matrix.service }}/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            BUILD_DATE=${{ github.event.head_commit.timestamp }}
+            VCS_REF=${{ github.sha }}
+            VERSION=${{ steps.meta.outputs.version }}
+  
+  # Job 2: Deploy to Dev environment
+  deploy-dev:
+    name: Deploy to Dev
+    runs-on: ubuntu-latest
+    needs: [build-images]
+    if: github.ref == 'refs/heads/develop' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'dev')
+    environment:
+      name: dev
+      url: https://dev.aspnet-learning.com
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'latest'
+      
+      - name: Configure kubectl
+        run: |
+          echo "${{ secrets.KUBE_CONFIG_DEV }}" | base64 -d > kubeconfig
+          export KUBECONFIG=kubeconfig
+      
+      - name: Update image tags in manifests
+        run: |
+          cd k8s/overlays/dev
+          kustomize edit set image \
+            api-gateway=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/api-gateway:${{ github.sha }} \
+            auth-service=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/auth-service:${{ github.sha }} \
+            code-executor=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/code-executor:${{ github.sha }} \
+            sql-executor=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/sql-executor:${{ github.sha }} \
+            gamification-engine=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/gamification-engine:${{ github.sha }} \
+            ai-tutor=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/ai-tutor:${{ github.sha }} \
+            notification-service=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/notification-service:${{ github.sha }} \
+            analytics-service=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/analytics-service:${{ github.sha }} \
+            frontend=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/frontend:${{ github.sha }}
+      
+      - name: Deploy to Kubernetes
+        run: |
+          export KUBECONFIG=kubeconfig
+          kubectl apply -k k8s/overlays/dev
+          kubectl rollout status deployment -n dev --timeout=5m
+      
+      - name: Run smoke tests
+        run: |
+          sleep 30  # Wait for services to stabilize
+          curl -f https://dev.aspnet-learning.com/health || exit 1
+  
+  # Job 3: Deploy to Staging environment
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [build-images]
+    if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging')
+    environment:
+      name: staging
+      url: https://staging.aspnet-learning.com
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'latest'
+      
+      - name: Configure kubectl
+        run: |
+          echo "${{ secrets.KUBE_CONFIG_STAGING }}" | base64 -d > kubeconfig
+          export KUBECONFIG=kubeconfig
+      
+      - name: Update image tags in manifests
+        run: |
+          cd k8s/overlays/staging
+          kustomize edit set image \
+            api-gateway=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/api-gateway:${{ github.sha }} \
+            auth-service=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/auth-service:${{ github.sha }} \
+            code-executor=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/code-executor:${{ github.sha }} \
+            sql-executor=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/sql-executor:${{ github.sha }} \
+            gamification-engine=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/gamification-engine:${{ github.sha }} \
+            ai-tutor=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/ai-tutor:${{ github.sha }} \
+            notification-service=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/notification-service:${{ github.sha }} \
+            analytics-service=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/analytics-service:${{ github.sha }} \
+            frontend=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/frontend:${{ github.sha }}
+      
+      - name: Deploy to Kubernetes (Blue-Green)
+        run: |
+          export KUBECONFIG=kubeconfig
+          
+          # Deploy green environment
+          kubectl apply -k k8s/overlays/staging-green
+          kubectl rollout status deployment -n staging-green --timeout=10m
+          
+          # Run health checks
+          sleep 30
+          curl -f https://staging-green.aspnet-learning.com/health || exit 1
+          
+          # Switch traffic to green
+          kubectl patch service api-gateway -n staging -p '{"spec":{"selector":{"version":"green"}}}'
+          
+          # Wait and verify
+          sleep 30
+          curl -f https://staging.aspnet-learning.com/health || exit 1
+          
+          # Scale down blue environment
+          kubectl scale deployment --all --replicas=0 -n staging-blue
+      
+      - name: Run integration tests
+        run: |
+          export API_GATEWAY_URL=https://staging.aspnet-learning.com
+          dotnet test tests/Integration.Tests/Integration.Tests.csproj --configuration Release
+      
+      - name: Run load tests
+        run: |
+          k6 run --env API_GATEWAY_URL=https://staging.aspnet-learning.com tests/LoadTests/load-test-scenarios.js
+  
+  # Job 4: Deploy to Production environment
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [deploy-staging]
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production')
+    environment:
+      name: production
+      url: https://aspnet-learning.com
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'latest'
+      
+      - name: Configure kubectl
+        run: |
+          echo "${{ secrets.KUBE_CONFIG_PRODUCTION }}" | base64 -d > kubeconfig
+          export KUBECONFIG=kubeconfig
+      
+      - name: Create backup
+        run: |
+          export KUBECONFIG=kubeconfig
+          kubectl get all -n production -o yaml > backup-$(date +%Y%m%d-%H%M%S).yaml
+      
+      - name: Update image tags in manifests
+        run: |
+          cd k8s/overlays/production
+          kustomize edit set image \
+            api-gateway=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/api-gateway:${{ github.ref_name }} \
+            auth-service=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/auth-service:${{ github.ref_name }} \
+            code-executor=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/code-executor:${{ github.ref_name }} \
+            sql-executor=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/sql-executor:${{ github.ref_name }} \
+            gamification-engine=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/gamification-engine:${{ github.ref_name }} \
+            ai-tutor=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/ai-tutor:${{ github.ref_name }} \
+            notification-service=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/notification-service:${{ github.ref_name }} \
+            analytics-service=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/analytics-service:${{ github.ref_name }} \
+            frontend=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/frontend:${{ github.ref_name }}
+      
+      - name: Deploy to Production (Canary)
+        run: |
+          export KUBECONFIG=kubeconfig
+          
+          # Deploy canary (10% traffic)
+          kubectl apply -k k8s/overlays/production-canary
+          kubectl rollout status deployment -n production-canary --timeout=10m
+          
+          # Monitor canary for 5 minutes
+          sleep 300
+          
+          # Check error rate
+          ERROR_RATE=$(curl -s https://aspnet-learning.com/metrics | grep error_rate | awk '{print $2}')
+          if (( $(echo "$ERROR_RATE > 0.01" | bc -l) )); then
+            echo "Canary error rate too high: $ERROR_RATE"
+            kubectl delete -k k8s/overlays/production-canary
+            exit 1
+          fi
+          
+          # Gradually increase traffic: 10% -> 25% -> 50% -> 100%
+          kubectl patch service api-gateway -n production -p '{"spec":{"selector":{"version":"canary"}}}' --type=strategic --patch-file=<(echo '{"spec":{"sessionAffinity":"ClientIP","sessionAffinityConfig":{"clientIP":{"timeoutSeconds":10800}}}}')
+          
+          # 25% traffic
+          sleep 300
+          
+          # 50% traffic
+          sleep 300
+          
+          # 100% traffic
+          kubectl patch service api-gateway -n production -p '{"spec":{"selector":{"version":"canary"}}}'
+          
+          # Wait and verify
+          sleep 60
+          curl -f https://aspnet-learning.com/health || exit 1
+          
+          # Promote canary to stable
+          kubectl apply -k k8s/overlays/production
+          kubectl rollout status deployment -n production --timeout=10m
+          
+          # Scale down canary
+          kubectl delete -k k8s/overlays/production-canary
+      
+      - name: Run production smoke tests
+        run: |
+          curl -f https://aspnet-learning.com/health || exit 1
+          curl -f https://aspnet-learning.com/api/v1/health || exit 1
+      
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref_name }}
+          release_name: Release ${{ github.ref_name }}
+          body: |
+            Production deployment successful
+            
+            **Services deployed:**
+            - API Gateway
+            - Auth Service
+            - Code Executor
+            - SQL Executor
+            - Gamification Engine
+            - AI Tutor
+            - Notification Service
+            - Analytics Service
+            - Frontend
+            
+            **Deployment strategy:** Canary (10% -> 25% -> 50% -> 100%)
+          draft: false
+          prerelease: false
+  
+  # Job 5: Rollback on failure
+  rollback:
+    name: Rollback on Failure
+    runs-on: ubuntu-latest
+    needs: [deploy-production]
+    if: failure()
+    
+    steps:
+      - name: Rollback production deployment
+        run: |
+          echo "${{ secrets.KUBE_CONFIG_PRODUCTION }}" | base64 -d > kubeconfig
+          export KUBECONFIG=kubeconfig
+          
+          # Rollback all deployments
+          kubectl rollout undo deployment --all -n production
+          kubectl rollout status deployment -n production --timeout=10m
+          
+          # Verify rollback
+          curl -f https://aspnet-learning.com/health || exit 1
+      
+      - name: Notify rollback
+        uses: 8398a7/action-slack@v3
+        with:
+          status: failure
+          text: |
+            🚨 Production deployment failed and was rolled back
+            Branch: ${{ github.ref }}
+            Commit: ${{ github.sha }}
+            Author: ${{ github.actor }}
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}

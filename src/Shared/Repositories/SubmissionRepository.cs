@@ -30,4 +30,21 @@ public class SubmissionRepository : BaseRepository<Submission>, ISubmissionRepos
                 .ToListAsync()
         );
     }
+
+    public async Task<List<Submission>> GetTimeAttackLeaderboardAsync(Guid challengeId, int limit = 100)
+    {
+        return await _retryPolicy.ExecuteAsync(async () =>
+            await _context.Submissions
+                .Include(s => s.User)
+                .Where(s => s.ChallengeId == challengeId && 
+                           s.IsTimeAttack && 
+                           s.Passed && 
+                           s.CompletionTimeSeconds.HasValue)
+                .GroupBy(s => s.UserId)
+                .Select(g => g.OrderBy(s => s.CompletionTimeSeconds).First())
+                .OrderBy(s => s.CompletionTimeSeconds)
+                .Take(limit)
+                .ToListAsync()
+        );
+    }
 }

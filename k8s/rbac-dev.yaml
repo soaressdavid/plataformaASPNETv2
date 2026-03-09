@@ -1,0 +1,247 @@
+# Development Environment RBAC Configuration
+# Service Accounts for all microservices in dev namespace
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: api-gateway-sa
+  namespace: platform-saas-dev
+  labels:
+    app: api-gateway
+    environment: dev
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: code-executor-sa
+  namespace: platform-saas-dev
+  labels:
+    app: code-executor
+    environment: dev
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: sql-executor-sa
+  namespace: platform-saas-dev
+  labels:
+    app: sql-executor
+    environment: dev
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: gamification-sa
+  namespace: platform-saas-dev
+  labels:
+    app: gamification-engine
+    environment: dev
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ai-tutor-sa
+  namespace: platform-saas-dev
+  labels:
+    app: ai-tutor
+    environment: dev
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: notification-sa
+  namespace: platform-saas-dev
+  labels:
+    app: notification-service
+    environment: dev
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: analytics-sa
+  namespace: platform-saas-dev
+  labels:
+    app: analytics-service
+    environment: dev
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: telemetry-sa
+  namespace: platform-saas-dev
+  labels:
+    app: telemetry-service
+    environment: dev
+
+---
+# Role for Code Executor in dev
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: code-executor-role
+  namespace: platform-saas-dev
+rules:
+- apiGroups: [""]
+  resources: ["pods", "pods/log"]
+  verbs: ["get", "list", "watch", "create", "delete"]
+- apiGroups: [""]
+  resources: ["secrets", "configmaps"]
+  verbs: ["get", "list"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: code-executor-rolebinding
+  namespace: platform-saas-dev
+subjects:
+- kind: ServiceAccount
+  name: code-executor-sa
+  namespace: platform-saas-dev
+roleRef:
+  kind: Role
+  name: code-executor-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# Role for SQL Executor in dev
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: sql-executor-role
+  namespace: platform-saas-dev
+rules:
+- apiGroups: [""]
+  resources: ["pods", "pods/log"]
+  verbs: ["get", "list", "watch", "create", "delete"]
+- apiGroups: [""]
+  resources: ["secrets", "configmaps"]
+  verbs: ["get", "list"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: sql-executor-rolebinding
+  namespace: platform-saas-dev
+subjects:
+- kind: ServiceAccount
+  name: sql-executor-sa
+  namespace: platform-saas-dev
+roleRef:
+  kind: Role
+  name: sql-executor-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# Standard role for other services in dev
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: standard-service-role
+  namespace: platform-saas-dev
+rules:
+- apiGroups: [""]
+  resources: ["secrets", "configmaps"]
+  verbs: ["get", "list"]
+- apiGroups: [""]
+  resources: ["services", "endpoints"]
+  verbs: ["get", "list", "watch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: api-gateway-rolebinding
+  namespace: platform-saas-dev
+subjects:
+- kind: ServiceAccount
+  name: api-gateway-sa
+  namespace: platform-saas-dev
+roleRef:
+  kind: Role
+  name: standard-service-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: gamification-rolebinding
+  namespace: platform-saas-dev
+subjects:
+- kind: ServiceAccount
+  name: gamification-sa
+  namespace: platform-saas-dev
+roleRef:
+  kind: Role
+  name: standard-service-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ai-tutor-rolebinding
+  namespace: platform-saas-dev
+subjects:
+- kind: ServiceAccount
+  name: ai-tutor-sa
+  namespace: platform-saas-dev
+roleRef:
+  kind: Role
+  name: standard-service-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: notification-rolebinding
+  namespace: platform-saas-dev
+subjects:
+- kind: ServiceAccount
+  name: notification-sa
+  namespace: platform-saas-dev
+roleRef:
+  kind: Role
+  name: standard-service-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: analytics-rolebinding
+  namespace: platform-saas-dev
+subjects:
+- kind: ServiceAccount
+  name: analytics-sa
+  namespace: platform-saas-dev
+roleRef:
+  kind: Role
+  name: standard-service-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: telemetry-rolebinding
+  namespace: platform-saas-dev
+subjects:
+- kind: ServiceAccount
+  name: telemetry-sa
+  namespace: platform-saas-dev
+roleRef:
+  kind: Role
+  name: standard-service-role
+  apiGroup: rbac.authorization.k8s.io

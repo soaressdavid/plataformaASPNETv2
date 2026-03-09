@@ -1,0 +1,337 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: platform-saas
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+      external_labels:
+        cluster: 'platform-saas'
+        environment: 'production'
+
+    # Alertmanager configuration
+    alerting:
+      alertmanagers:
+        - static_configs:
+            - targets:
+                - alertmanager:9093
+
+    # Load rules once and periodically evaluate them
+    rule_files:
+      - '/etc/prometheus/rules/*.yml'
+
+    # Scrape configurations
+    scrape_configs:
+      # Prometheus self-monitoring
+      - job_name: 'prometheus'
+        static_configs:
+          - targets: ['localhost:9090']
+
+      # Kubernetes API server
+      - job_name: 'kubernetes-apiservers'
+        kubernetes_sd_configs:
+          - role: endpoints
+        scheme: https
+        tls_config:
+          ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
+            action: keep
+            regex: default;kubernetes;https
+
+      # Kubernetes nodes
+      - job_name: 'kubernetes-nodes'
+        kubernetes_sd_configs:
+          - role: node
+        scheme: https
+        tls_config:
+          ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+        relabel_configs:
+          - action: labelmap
+            regex: __meta_kubernetes_node_label_(.+)
+
+      # Kubernetes pods
+      - job_name: 'kubernetes-pods'
+        kubernetes_sd_configs:
+          - role: pod
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+            action: keep
+            regex: true
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+            action: replace
+            target_label: __metrics_path__
+            regex: (.+)
+          - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+            action: replace
+            regex: ([^:]+)(?::\d+)?;(\d+)
+            replacement: $1:$2
+            target_label: __address__
+          - action: labelmap
+            regex: __meta_kubernetes_pod_label_(.+)
+          - source_labels: [__meta_kubernetes_namespace]
+            action: replace
+            target_label: kubernetes_namespace
+          - source_labels: [__meta_kubernetes_pod_name]
+            action: replace
+            target_label: kubernetes_pod_name
+
+      # API Gateway
+      - job_name: 'api-gateway'
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names:
+                - platform-saas
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_app]
+            action: keep
+            regex: api-gateway
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: pod
+          - source_labels: [__meta_kubernetes_namespace]
+            target_label: namespace
+
+      # Code Executor Service
+      - job_name: 'code-executor'
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names:
+                - platform-saas
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_app]
+            action: keep
+            regex: execution-service
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: pod
+          - source_labels: [__meta_kubernetes_namespace]
+            target_label: namespace
+
+      # Auth Service
+      - job_name: 'auth-service'
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names:
+                - platform-saas
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_app]
+            action: keep
+            regex: auth-service
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: pod
+          - source_labels: [__meta_kubernetes_namespace]
+            target_label: namespace
+
+      # Challenge Service
+      - job_name: 'challenge-service'
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names:
+                - platform-saas
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_app]
+            action: keep
+            regex: challenge-service
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: pod
+          - source_labels: [__meta_kubernetes_namespace]
+            target_label: namespace
+
+      # Course Service
+      - job_name: 'course-service'
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names:
+                - platform-saas
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_app]
+            action: keep
+            regex: course-service
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: pod
+          - source_labels: [__meta_kubernetes_namespace]
+            target_label: namespace
+
+      # Progress Service
+      - job_name: 'progress-service'
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names:
+                - platform-saas
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_app]
+            action: keep
+            regex: progress-service
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: pod
+          - source_labels: [__meta_kubernetes_namespace]
+            target_label: namespace
+
+      # AI Tutor Service
+      - job_name: 'aitutor-service'
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names:
+                - platform-saas
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_app]
+            action: keep
+            regex: aitutor-service
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: pod
+          - source_labels: [__meta_kubernetes_namespace]
+            target_label: namespace
+
+      # Redis
+      - job_name: 'redis'
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names:
+                - platform-saas
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_app]
+            action: keep
+            regex: redis
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: pod
+
+      # RabbitMQ
+      - job_name: 'rabbitmq'
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names:
+                - platform-saas
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_app]
+            action: keep
+            regex: rabbitmq
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: pod
+
+  alert-rules.yml: |
+    groups:
+      - name: platform_alerts
+        interval: 30s
+        rules:
+          # CPU Usage Alert
+          - alert: HighCPUUsage
+            expr: 100 - (avg by (instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+            for: 5m
+            labels:
+              severity: warning
+              component: infrastructure
+            annotations:
+              summary: "High CPU usage detected on {{ $labels.instance }}"
+              description: "CPU usage is above 80% (current value: {{ $value }}%)"
+
+          # Memory Usage Alert
+          - alert: HighMemoryUsage
+            expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 80
+            for: 5m
+            labels:
+              severity: warning
+              component: infrastructure
+            annotations:
+              summary: "High memory usage detected on {{ $labels.instance }}"
+              description: "Memory usage is above 80% (current value: {{ $value }}%)"
+
+          # Disk Usage Alert
+          - alert: HighDiskUsage
+            expr: (1 - (node_filesystem_avail_bytes{fstype!="tmpfs"} / node_filesystem_size_bytes{fstype!="tmpfs"})) * 100 > 80
+            for: 5m
+            labels:
+              severity: warning
+              component: infrastructure
+            annotations:
+              summary: "High disk usage detected on {{ $labels.instance }}"
+              description: "Disk usage is above 80% (current value: {{ $value }}%)"
+
+          # API Error Rate Alert
+          - alert: HighAPIErrorRate
+            expr: (sum(rate(http_requests_total{status=~"5.."}[5m])) / sum(rate(http_requests_total[5m]))) * 100 > 5
+            for: 5m
+            labels:
+              severity: critical
+              component: api
+            annotations:
+              summary: "High API error rate detected"
+              description: "API error rate is above 5% (current value: {{ $value }}%)"
+
+          # API Response Time Alert
+          - alert: HighAPIResponseTime
+            expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le)) > 2
+            for: 5m
+            labels:
+              severity: warning
+              component: api
+            annotations:
+              summary: "High API response time detected"
+              description: "95th percentile response time is above 2 seconds (current value: {{ $value }}s)"
+
+          # Database Connection Pool Alert
+          - alert: HighDatabaseConnectionPoolUtilization
+            expr: (sum(database_connections_active) / sum(database_connections_max)) * 100 > 90
+            for: 5m
+            labels:
+              severity: critical
+              component: database
+            annotations:
+              summary: "High database connection pool utilization"
+              description: "Connection pool utilization is above 90% (current value: {{ $value }}%)"
+
+          # Message Queue Length Alert
+          - alert: HighMessageQueueLength
+            expr: rabbitmq_queue_messages > 1000
+            for: 5m
+            labels:
+              severity: warning
+              component: messaging
+            annotations:
+              summary: "High message queue length on {{ $labels.queue }}"
+              description: "Queue length exceeds 1000 messages (current value: {{ $value }})"
+
+          # Pod Restart Alert
+          - alert: PodRestartingFrequently
+            expr: rate(kube_pod_container_status_restarts_total[1h]) > 5
+            for: 5m
+            labels:
+              severity: warning
+              component: kubernetes
+            annotations:
+              summary: "Pod {{ $labels.pod }} is restarting frequently"
+              description: "Pod has restarted {{ $value }} times in the last hour"
+
+          # Service Down Alert
+          - alert: ServiceDown
+            expr: up == 0
+            for: 2m
+            labels:
+              severity: critical
+              component: service
+            annotations:
+              summary: "Service {{ $labels.job }} is down"
+              description: "Service has been down for more than 2 minutes"
+
+          # Container Memory Usage Alert
+          - alert: ContainerMemoryUsageHigh
+            expr: (container_memory_usage_bytes / container_spec_memory_limit_bytes) * 100 > 80
+            for: 5m
+            labels:
+              severity: warning
+              component: container
+            annotations:
+              summary: "Container {{ $labels.container }} memory usage is high"
+              description: "Container memory usage is above 80% (current value: {{ $value }}%)"

@@ -31,8 +31,14 @@ builder.Services.AddControllers();
 // Add database context
 var connectionString = "Server=localhost,1433;Database=aspnet_learning_platform;User Id=sa;Password=P@ssw0rd!2026#SecurePlatform;TrustServerCertificate=True";
 builder.Configuration["ConnectionStrings:DefaultConnection"] = connectionString;
-builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlServer(connectionString));
+
+// Only register SQL Server if not in test environment
+// Tests will register InMemory database instead
+if (!builder.Environment.EnvironmentName.Equals("Test", StringComparison.OrdinalIgnoreCase))
+{
+    builder.Services.AddDbContext<ApplicationDbContext>(options =>
+        options.UseSqlServer(connectionString));
+}
 
 // Add memory cache
 builder.Services.AddMemoryCache();

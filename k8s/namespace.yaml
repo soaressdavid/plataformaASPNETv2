@@ -1,7 +1,28 @@
+# Development Namespace
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: aspnet-learning-platform
+  name: platform-saas-dev
   labels:
-    name: aspnet-learning-platform
+    name: platform-saas
+    environment: dev
+
+---
+# Staging Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: platform-saas-staging
+  labels:
+    name: platform-saas
+    environment: staging
+
+---
+# Production Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: platform-saas-prod
+  labels:
+    name: platform-saas
     environment: production
