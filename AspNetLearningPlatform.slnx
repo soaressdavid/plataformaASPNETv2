@@ -1,0 +1,38 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ApiGateway/ApiGateway.csproj" />
+    <Project Path="src/Shared/Shared.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/" />
+  <Folder Name="/src/Services/AITutor/">
+    <Project Path="src/Services/AITutor/AITutor.Service.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/Auth/">
+    <Project Path="src/Services/Auth/Auth.Service.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/Challenge/">
+    <Project Path="src/Services/Challenge/Challenge.Service.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/Course/">
+    <Project Path="src/Services/Course/Course.Service.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/Execution/">
+    <Project Path="src/Services/Execution/Execution.Service.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/Progress/">
+    <Project Path="src/Services/Progress/Progress.Service.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/Worker/">
+    <Project Path="src/Services/Worker/Worker.Service.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/AITutor.Tests/AITutor.Tests.csproj" />
+    <Project Path="tests/ApiGateway.Tests/ApiGateway.Tests.csproj" />
+    <Project Path="tests/Auth.Tests/Auth.Tests.csproj" />
+    <Project Path="tests/Challenge.Tests/Challenge.Tests.csproj" />
+    <Project Path="tests/Course.Tests/Course.Tests.csproj" />
+    <Project Path="tests/Execution.Tests/Execution.Tests.csproj" />
+    <Project Path="tests/Progress.Tests/Progress.Tests.csproj" />
+    <Project Path="tests/Shared.Tests/Shared.Tests.csproj" />
+  </Folder>
+</Solution>

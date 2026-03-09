@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: aspnet-learning-platform
+  labels:
+    name: aspnet-learning-platform
+    environment: production

@@ -1,0 +1,97 @@
+╔═══════════════════════════════════════════════════════════════════════════╗
+║                                                                           ║
+║              AspNet Learning Platform - QUICK START GUIDE                 ║
+║                                                                           ║
+╚═══════════════════════════════════════════════════════════════════════════╝
+
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│  🚀 INICIAR TUDO (1 COMANDO)                                              │
+└───────────────────────────────────────────────────────────────────────────┘
+
+    .\start-all.ps1
+
+    ✅ Inicia Docker (SQL Server, RabbitMQ, Redis)
+    ✅ Compila todos os projetos
+    ✅ Inicia 8 microserviços
+    ✅ Verifica saúde automaticamente
+
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│  🛑 PARAR TUDO                                                            │
+└───────────────────────────────────────────────────────────────────────────┘
+
+    Pressione Ctrl+C no terminal do start-all.ps1
+    
+    OU execute:
+    
+    .\stop-all.ps1
+
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│  🔄 REINICIAR                                                             │
+└───────────────────────────────────────────────────────────────────────────┘
+
+    .\restart-all.ps1
+
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│  ❤️ VERIFICAR SAÚDE                                                       │
+└───────────────────────────────────────────────────────────────────────────┘
+
+    .\health-check.ps1
+
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│  🌐 ACESSAR APLICAÇÃO                                                     │
+└───────────────────────────────────────────────────────────────────────────┘
+
+    ApiGateway:  http://localhost:5000
+    Swagger:     http://localhost:5000/swagger
+    RabbitMQ:    http://localhost:15672  (guest/guest)
+
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│  ⚡ OPÇÕES RÁPIDAS                                                        │
+└───────────────────────────────────────────────────────────────────────────┘
+
+    Iniciar sem recompilar (mais rápido):
+    .\start-all.ps1 -SkipBuild
+
+    Iniciar sem Docker:
+    .\start-all.ps1 -SkipDocker
+
+    Ver logs do Docker:
+    .\logs.ps1 -Docker
+
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│  📚 MAIS INFORMAÇÕES                                                      │
+└───────────────────────────────────────────────────────────────────────────┘
+
+    START.md              → Guia completo de uso
+    COMANDOS_RAPIDOS.md   → Todos os comandos disponíveis
+    CONFIGURATION.md      → Configuração detalhada
+
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│  🐛 PROBLEMAS COMUNS                                                      │
+└───────────────────────────────────────────────────────────────────────────┘
+
+    Porta em uso:
+    Get-Process dotnet | Stop-Process -Force
+
+    Docker não inicia:
+    docker-compose down
+    docker-compose up -d
+
+    Erro de compilação:
+    dotnet clean
+    dotnet build --no-incremental
+
+
+╔═══════════════════════════════════════════════════════════════════════════╗
+║                                                                           ║
+║  ✨ PRONTO! Execute .\start-all.ps1 e aguarde ~30 segundos               ║
+║                                                                           ║
+╚═══════════════════════════════════════════════════════════════════════════╝

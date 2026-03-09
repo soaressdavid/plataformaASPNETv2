@@ -1,0 +1,63 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: aspnet-learning-platform
+
+resources:
+  # Namespace
+  - namespace.yaml
+  
+  # Configuration
+  - secrets.yaml
+  - configmap.yaml
+  
+  # Infrastructure
+  - postgres-deployment.yaml
+  - redis-deployment.yaml
+  - rabbitmq-deployment.yaml
+  
+  # Microservices
+  - auth-service-deployment.yaml
+  - course-service-deployment.yaml
+  - challenge-service-deployment.yaml
+  - progress-service-deployment.yaml
+  - aitutor-service-deployment.yaml
+  - execution-service-deployment.yaml
+  
+  # Workers
+  - worker-deployment.yaml
+  - worker-hpa.yaml
+  
+  # API Gateway
+  - api-gateway-deployment.yaml
+  
+  # Frontend
+  - frontend-deployment.yaml
+  
+  # Ingress
+  - ingress.yaml
+
+commonLabels:
+  app.kubernetes.io/name: aspnet-learning-platform
+  app.kubernetes.io/version: "1.0.0"
+  app.kubernetes.io/managed-by: kustomize
+
+images:
+  - name: aspnet-learning-platform/auth-service
+    newTag: latest
+  - name: aspnet-learning-platform/course-service
+    newTag: latest
+  - name: aspnet-learning-platform/challenge-service
+    newTag: latest
+  - name: aspnet-learning-platform/progress-service
+    newTag: latest
+  - name: aspnet-learning-platform/aitutor-service
+    newTag: latest
+  - name: aspnet-learning-platform/execution-service
+    newTag: latest
+  - name: aspnet-learning-platform/worker
+    newTag: latest
+  - name: aspnet-learning-platform/api-gateway
+    newTag: latest
+  - name: aspnet-learning-platform/frontend
+    newTag: latest

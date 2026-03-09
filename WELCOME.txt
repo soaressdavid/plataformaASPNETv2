@@ -1,0 +1,186 @@
+
+    ╔═══════════════════════════════════════════════════════════════════╗
+    ║                                                                   ║
+    ║              🎓 AspNet Learning Platform 🎓                       ║
+    ║                                                                   ║
+    ║         Plataforma de Aprendizado de C# e .NET                    ║
+    ║                                                                   ║
+    ╚═══════════════════════════════════════════════════════════════════╝
+
+
+    ┌───────────────────────────────────────────────────────────────────┐
+    │                                                                   │
+    │  👋 BEM-VINDO AO PROJETO!                                         │
+    │                                                                   │
+    └───────────────────────────────────────────────────────────────────┘
+
+
+    Este é um projeto de plataforma de aprendizado completo com:
+
+    ✨ 8 Microserviços .NET
+    ✨ API Gateway com Ocelot
+    ✨ Autenticação JWT
+    ✨ Execução de código em tempo real
+    ✨ Tutor com IA
+    ✨ Sistema de progresso e desafios
+    ✨ Arquitetura escalável
+
+
+    ┌───────────────────────────────────────────────────────────────────┐
+    │                                                                   │
+    │  🚀 COMO COMEÇAR (3 PASSOS)                                       │
+    │                                                                   │
+    └───────────────────────────────────────────────────────────────────┘
+
+
+    1️⃣  Leia o guia rápido:
+        
+        📄 LEIA-ME.txt
+
+
+    2️⃣  Inicie o projeto:
+        
+        🖱️  Duplo clique em: START.cmd
+        
+        OU
+        
+        ⌨️  Execute: .\start-all.ps1
+
+
+    3️⃣  Acesse a aplicação:
+        
+        🌐 http://localhost:5000/swagger
+
+
+    ┌───────────────────────────────────────────────────────────────────┐
+    │                                                                   │
+    │  📚 DOCUMENTAÇÃO DISPONÍVEL                                       │
+    │                                                                   │
+    └───────────────────────────────────────────────────────────────────┘
+
+
+    Para iniciantes:
+    📄 LEIA-ME.txt           → Guia visual em português
+    📄 QUICK-START.txt       → Referência rápida
+
+    Para desenvolvedores:
+    📄 README-STARTUP.md     → Guia completo de inicialização
+    📄 START.md              → Instruções dos scripts
+    📄 COMANDOS_RAPIDOS.md   → Todos os comandos
+
+    Índice completo:
+    📄 INDEX.md              → Índice de toda documentação
+
+
+    ┌───────────────────────────────────────────────────────────────────┐
+    │                                                                   │
+    │  🎮 SCRIPTS DISPONÍVEIS                                           │
+    │                                                                   │
+    └───────────────────────────────────────────────────────────────────┘
+
+
+    Windows (Duplo Clique):
+    🖱️  START.cmd            → Inicia tudo
+    🖱️  STOP.cmd             → Para tudo
+
+    PowerShell (Recomendado):
+    ⌨️  .\start-all.ps1      → Inicia todo o sistema
+    ⌨️  .\stop-all.ps1       → Para todos os serviços
+    ⌨️  .\restart-all.ps1    → Reinicia tudo
+    ⌨️  .\health-check.ps1   → Verifica saúde
+    ⌨️  .\logs.ps1 -Docker   → Exibe logs
+
+
+    ┌───────────────────────────────────────────────────────────────────┐
+    │                                                                   │
+    │  🏗️ ARQUITETURA DO SISTEMA                                        │
+    │                                                                   │
+    └───────────────────────────────────────────────────────────────────┘
+
+
+    Infraestrutura:
+    🗄️ SQL Server            → Banco de dados
+    🐰 RabbitMQ              → Message broker
+    📦 Redis                 → Cache
+
+    Microserviços:
+    🌐 ApiGateway (5000)     → Gateway principal
+    🔐 Auth (5001)           → Autenticação
+    📚 Course (5002)         → Cursos
+    📊 Progress (5003)       → Progresso
+    🎯 Challenge (5004)      → Desafios
+    ⚙️  Execution (5005)     → Execução de código
+    🤖 AITutor (5006)        → Tutor IA
+    👷 Worker (5007)         → Background jobs
+
+
+    ┌───────────────────────────────────────────────────────────────────┐
+    │                                                                   │
+    │  🎯 PRÓXIMOS PASSOS                                               │
+    │                                                                   │
+    └───────────────────────────────────────────────────────────────────┘
+
+
+    1. Certifique-se de ter instalado:
+       ✅ .NET 10 SDK
+       ✅ Docker Desktop
+       ✅ PowerShell
+
+    2. Leia o guia rápido:
+       📄 LEIA-ME.txt
+
+    3. Inicie o projeto:
+       🖱️  START.cmd  ou  ⌨️  .\start-all.ps1
+
+    4. Aguarde ~30 segundos
+
+    5. Acesse:
+       🌐 http://localhost:5000/swagger
+
+    6. Explore a API e divirta-se! 🎉
+
+
+    ┌───────────────────────────────────────────────────────────────────┐
+    │                                                                   │
+    │  💡 DICAS IMPORTANTES                                             │
+    │                                                                   │
+    └───────────────────────────────────────────────────────────────────┘
+
+
+    ✅ Use .\start-all.ps1 -SkipBuild para iniciar mais rápido
+    ✅ Execute .\health-check.ps1 após iniciar
+    ✅ Aguarde 30-60 segundos na primeira inicialização
+    ✅ Use Ctrl+C para parar de forma limpa
+    ✅ Veja logs com .\logs.ps1 -Docker se algo falhar
+
+
+    ┌───────────────────────────────────────────────────────────────────┐
+    │                                                                   │
+    │  🆘 PRECISA DE AJUDA?                                             │
+    │                                                                   │
+    └───────────────────────────────────────────────────────────────────┘
+
+
+    1. Leia: LEIA-ME.txt
+    2. Consulte: README-STARTUP.md (seção Troubleshooting)
+    3. Execute: .\health-check.ps1
+    4. Veja: INDEX.md para encontrar documentação específica
+
+
+    ╔═══════════════════════════════════════════════════════════════════╗
+    ║                                                                   ║
+    ║  ✨ PRONTO PARA COMEÇAR?                                          ║
+    ║                                                                   ║
+    ║  Execute: .\start-all.ps1                                         ║
+    ║                                                                   ║
+    ║  Ou dê duplo clique em: START.cmd                                 ║
+    ║                                                                   ║
+    ╚═══════════════════════════════════════════════════════════════════╝
+
+
+    Boa sorte e bom desenvolvimento! 🚀
+
+    ---
+    Última atualização: 8 de março de 2026
+    Versão: 1.0
+

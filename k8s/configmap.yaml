@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: platform-config
+  namespace: aspnet-learning-platform
+data:
+  # Database Configuration
+  POSTGRES_HOST: "postgres-service"
+  POSTGRES_PORT: "5432"
+  POSTGRES_DB: "aspnet_learning_platform"
+  
+  # Redis Configuration
+  REDIS_HOST: "redis-service"
+  REDIS_PORT: "6379"
+  
+  # RabbitMQ Configuration
+  RABBITMQ_HOST: "rabbitmq-service"
+  RABBITMQ_PORT: "5672"
+  
+  # Service URLs
+  AUTH_SERVICE_URL: "http://auth-service:8080"
+  COURSE_SERVICE_URL: "http://course-service:8080"
+  CHALLENGE_SERVICE_URL: "http://challenge-service:8080"
+  PROGRESS_SERVICE_URL: "http://progress-service:8080"
+  AITUTOR_SERVICE_URL: "http://aitutor-service:8080"
+  EXECUTION_SERVICE_URL: "http://execution-service:8080"
+  
+  # Application Settings
+  ASPNETCORE_ENVIRONMENT: "Production"
+  ASPNETCORE_URLS: "http://+:8080"

@@ -1,0 +1,239 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: ASP.NET Learning Platform Alerts
+    folder: Alerts
+    interval: 1m
+    rules:
+      # High Error Rate Alert
+      - uid: high_error_rate
+        title: High API Error Rate
+        condition: A
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: ${DS_PROMETHEUS}
+            model:
+              expr: rate(api_errors_total[5m]) > 0.1
+              refId: A
+        noDataState: NoData
+        execErrState: Alerting
+        for: 5m
+        annotations:
+          description: 'API error rate is above 0.1 errors/sec for service {{ $labels.service }}'
+          summary: High error rate detected
+        labels:
+          severity: critical
+          component: api-gateway
+
+      # High Queue Depth Alert
+      - uid: high_queue_depth
+        title: High Execution Queue Depth
+        condition: A
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: ${DS_PROMETHEUS}
+            model:
+              expr: execution_queue_depth > 50
+              refId: A
+        noDataState: NoData
+        execErrState: Alerting
+        for: 5m
+        annotations:
+          description: 'Execution queue depth is {{ $value }}, which exceeds the threshold of 50 jobs'
+          summary: Code execution queue is backing up
+        labels:
+          severity: warning
+          component: execution-service
+
+      # Low Worker Utilization Alert
+      - uid: low_worker_utilization
+        title: Low Worker Utilization
+        condition: A
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: ${DS_PROMETHEUS}
+            model:
+              expr: avg(worker_utilization) < 0.2
+              refId: A
+        noDataState: NoData
+        execErrState: Alerting
+        for: 10m
+        annotations:
+          description: 'Average worker utilization is {{ $value | humanizePercentage }}, which is below 20%'
+          summary: Workers are underutilized - consider scaling down
+        labels:
+          severity: info
+          component: worker
+
+      # Slow Code Execution Alert
+      - uid: slow_code_execution
+        title: Slow Code Execution
+        condition: A
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: ${DS_PROMETHEUS}
+            model:
+              expr: histogram_quantile(0.95, rate(code_execution_duration_seconds_bucket[5m])) > 5
+              refId: A
+        noDataState: NoData
+        execErrState: Alerting
+        for: 5m
+        annotations:
+          description: 'Code execution p95 latency is {{ $value }}s, which exceeds the 5s threshold'
+          summary: Code executions are taking longer than expected
+        labels:
+          severity: warning
+          component: execution-service
+
+      # High Code Execution Failure Rate Alert
+      - uid: high_execution_failure_rate
+        title: High Code Execution Failure Rate
+        condition: A
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: ${DS_PROMETHEUS}
+            model:
+              expr: |
+                rate(code_executions_failure_total[5m]) / 
+                rate(code_executions_total[5m]) > 0.1
+              refId: A
+        noDataState: NoData
+        execErrState: Alerting
+        for: 5m
+        annotations:
+          description: 'Code execution failure rate is {{ $value | humanizePercentage }}, which exceeds 10%'
+          summary: High rate of code execution failures
+        labels:
+          severity: critical
+          component: execution-service
+
+      # Slow API Response Time Alert
+      - uid: slow_api_response
+        title: Slow API Response Time
+        condition: A
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: ${DS_PROMETHEUS}
+            model:
+              expr: histogram_quantile(0.95, rate(api_request_duration_seconds_bucket[5m])) > 0.2
+              refId: A
+        noDataState: NoData
+        execErrState: Alerting
+        for: 5m
+        annotations:
+          description: 'API p95 response time is {{ $value }}s for {{ $labels.service }} {{ $labels.endpoint }}'
+          summary: API response times are degraded
+        labels:
+          severity: warning
+          component: api-gateway
+
+      # Database Query Performance Alert
+      - uid: slow_database_queries
+        title: Slow Database Queries
+        condition: A
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: ${DS_PROMETHEUS}
+            model:
+              expr: histogram_quantile(0.95, rate(database_query_duration_seconds_bucket[5m])) > 0.1
+              refId: A
+        noDataState: NoData
+        execErrState: Alerting
+        for: 5m
+        annotations:
+          description: 'Database query p95 latency is {{ $value }}s for {{ $labels.operation }} on {{ $labels.entity }}'
+          summary: Database queries are slower than expected
+        labels:
+          severity: warning
+          component: database
+
+      # High Database Error Rate Alert
+      - uid: high_database_error_rate
+        title: High Database Error Rate
+        condition: A
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: ${DS_PROMETHEUS}
+            model:
+              expr: rate(database_errors_total[5m]) > 0.05
+              refId: A
+        noDataState: NoData
+        execErrState: Alerting
+        for: 5m
+        annotations:
+          description: 'Database error rate is {{ $value }} errors/sec for {{ $labels.operation }} on {{ $labels.entity }}'
+          summary: High rate of database errors
+        labels:
+          severity: critical
+          component: database
+
+      # AI Review Timeout Alert
+      - uid: slow_ai_reviews
+        title: Slow AI Code Reviews
+        condition: A
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: ${DS_PROMETHEUS}
+            model:
+              expr: histogram_quantile(0.95, rate(ai_review_duration_seconds_bucket[5m])) > 10
+              refId: A
+        noDataState: NoData
+        execErrState: Alerting
+        for: 5m
+        annotations:
+          description: 'AI review p95 latency is {{ $value }}s, which exceeds the 10s threshold'
+          summary: AI code reviews are taking longer than expected
+        labels:
+          severity: warning
+          component: ai-tutor
+
+      # Worker Overload Alert
+      - uid: worker_overload
+        title: Worker Overload
+        condition: A
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: ${DS_PROMETHEUS}
+            model:
+              expr: avg(worker_utilization) > 0.9
+              refId: A
+        noDataState: NoData
+        execErrState: Alerting
+        for: 5m
+        annotations:
+          description: 'Average worker utilization is {{ $value | humanizePercentage }}, which exceeds 90%'
+          summary: Workers are overloaded - consider scaling up
+        labels:
+          severity: warning
+          component: worker

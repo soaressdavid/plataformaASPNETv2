@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Teste de localStorage</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        .test { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .success { background: #d4edda; border-color: #c3e6cb; }
+        .error { background: #f8d7da; border-color: #f5c6cb; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Teste de localStorage</h1>
+    
+    <div id="results"></div>
+    
+    <button onclick="runTests()">Executar Testes</button>
+    <button onclick="clearAll()">Limpar Tudo</button>
+    
+    <script>
+        function log(message, isError = false) {
+            const div = document.createElement('div');
+            div.className = 'test ' + (isError ? 'error' : 'success');
+            div.textContent = message;
+            document.getElementById('results').appendChild(div);
+            console.log(message);
+        }
+        
+        function clearAll() {
+            localStorage.clear();
+            document.getElementById('results').innerHTML = '';
+            log('✓ localStorage limpo');
+        }
+        
+        function runTests() {
+            document.getElementById('results').innerHTML = '';
+            
+            // Teste 1: Verificar se localStorage está disponível
+            if (typeof localStorage === 'undefined') {
+                log('✗ localStorage não está disponível!', true);
+                return;
+            }
+            log('✓ localStorage está disponível');
+            
+            // Teste 2: Salvar e recuperar string simples
+            try {
+                localStorage.setItem('test_string', 'hello');
+                const value = localStorage.getItem('test_string');
+                if (value === 'hello') {
+                    log('✓ Salvar/recuperar string simples: OK');
+                } else {
+                    log(`✗ String recuperada incorretamente: "${value}"`, true);
+                }
+                localStorage.removeItem('test_string');
+            } catch (e) {
+                log('✗ Erro ao salvar string: ' + e.message, true);
+            }
+            
+            // Teste 3: Salvar token simulado
+            try {
+                const fakeToken = 'NzA5Y2I2ZDYtZmFkOC00MmQ4LWFkNDMtYTMwNDczMDMyOTll';
+                localStorage.setItem('auth_token', fakeToken);
+                const retrieved = localStorage.getItem('auth_token');
+                if (retrieved === fakeToken) {
+                    log('✓ Salvar/recuperar auth_token: OK');
+                } else {
+                    log('✗ auth_token recuperado incorretamente', true);
+                }
+            } catch (e) {
+                log('✗ Erro ao salvar auth_token: ' + e.message, true);
+            }
+            
+            // Teste 4: Salvar objeto JSON
+            try {
+                const user = {userId: '123', name: 'Test', email: 'test@test.com'};
+                localStorage.setItem('auth_user', JSON.stringify(user));
+                const retrieved = JSON.parse(localStorage.getItem('auth_user'));
+                if (retrieved.userId === '123') {
+                    log('✓ Salvar/recuperar auth_user: OK');
+                } else {
+                    log('✗ auth_user recuperado incorretamente', true);
+                }
+            } catch (e) {
+                log('✗ Erro ao salvar auth_user: ' + e.message, true);
+            }
+            
+            // Teste 5: Verificar persistência após 2 segundos
+            setTimeout(() => {
+                const token = localStorage.getItem('auth_token');
+                const user = localStorage.getItem('auth_user');
+                if (token && user) {
+                    log('✓ Dados persistiram após 2 segundos');
+                } else {
+                    log('✗ Dados desapareceram após 2 segundos!', true);
+                }
+            }, 2000);
+            
+            // Teste 6: Verificar tamanho do localStorage
+            let totalSize = 0;
+            for (let key in localStorage) {
+                if (localStorage.hasOwnProperty(key)) {
+                    totalSize += localStorage[key].length + key.length;
+                }
+            }
+            log(`ℹ Tamanho total do localStorage: ${totalSize} bytes`);
+            
+            // Teste 7: Listar tudo no localStorage
+            log('ℹ Conteúdo atual do localStorage:');
+            for (let key in localStorage) {
+                if (localStorage.hasOwnProperty(key)) {
+                    const value = localStorage[key];
+                    log(`  ${key}: ${value.substring(0, 50)}${value.length > 50 ? '...' : ''}`);
+                }
+            }
+        }
+        
+        // Executar testes automaticamente ao carregar
+        window.onload = () => {
+            log('Página carregada. Clique em "Executar Testes" para começar.');
+        };
+    </script>
+</body>
+</html>

@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: aspnet-learning-sqlserver
+    environment:
+      ACCEPT_EULA: "Y"
+      SA_PASSWORD: "P@ssw0rd!2026#SecurePlatform"
+      MSSQL_PID: "Developer"
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+    networks:
+      - platform-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: aspnet-learning-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - platform-network
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: aspnet-learning-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: "platform_user"
+      RABBITMQ_DEFAULT_PASS: "SimplePass123"
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    networks:
+      - platform-network
+
+volumes:
+  sqlserver_data:
+
+networks:
+  platform-network:
+    driver: bridge
