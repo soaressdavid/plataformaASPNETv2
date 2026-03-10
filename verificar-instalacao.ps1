@@ -57,7 +57,7 @@ Write-Host "`n🧪 Testando funcionalidades SEM DOCKER..." -ForegroundColor Yell
 # Testar Execution Service (compilação in-process)
 try {
     $testCode = @{
-        code = "Console.WriteLine(\"Hello from in-process execution!\");"
+        code = 'Console.WriteLine("Hello from in-process execution!");'
     }
     $json = $testCode | ConvertTo-Json
     $response = Invoke-RestMethod -Uri "http://localhost:5006/api/code/execute" -Method Post -Body $json -ContentType "application/json" -TimeoutSec 10
