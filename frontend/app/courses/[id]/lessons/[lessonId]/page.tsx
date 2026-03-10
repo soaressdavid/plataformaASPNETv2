@@ -225,58 +225,110 @@ export default function LessonPage() {
       },
     });
     
-    // Execute the code
+    // Execute the code based on lesson type
     setIsRunning(true);
-    setOutput('Compilando e executando código...\n');
     
-    try {
-      // Call the actual execution service
-      const response = await fetch('http://localhost:5006/api/code/execute', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          code: code,
-          language: 'csharp',
-          timeoutSeconds: 10
-        }),
-      });
+    if (lessonType === 'sql') {
+      // Use SqlExecutor for SQL code
+      setOutput('Executando query SQL...\n');
       
-      console.log('Response status:', response.status);
-      console.log('Response headers:', response.headers);
-      
-      // Check if response is ok
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Error response:', errorText);
-        setOutput(`Erro HTTP ${response.status}:\n${errorText || 'Erro desconhecido'}`);
-        return;
+      try {
+        const response = await fetch('http://localhost:5008/api/sql/execute', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            Query: code
+          }),
+        });
+        
+        console.log('SQL Response status:', response.status);
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('SQL Error response:', errorText);
+          setOutput(`Erro HTTP ${response.status}:\n${errorText || 'Erro desconhecido'}`);
+          return;
+        }
+        
+        const result = await response.json();
+        console.log('SQL Execution result:', result);
+        
+        if (result.success) {
+          if (result.data && Array.isArray(result.data)) {
+            // Format SELECT results
+            let output = `${result.message}\n\n`;
+            if (result.data.length > 0) {
+              // Create table header
+              const columns = Object.keys(result.data[0]);
+              output += columns.join(' | ') + '\n';
+              output += columns.map(() => '---').join(' | ') + '\n';
+              
+              // Add rows
+              result.data.forEach(row => {
+                output += columns.map(col => row[col] || 'NULL').join(' | ') + '\n';
+              });
+            }
+            setOutput(output);
+          } else {
+            // INSERT, UPDATE, DELETE results
+            setOutput(result.message || 'Comando executado com sucesso.');
+          }
+        } else {
+          setOutput(`Erro SQL:\n${result.error || 'Erro desconhecido'}`);
+        }
+      } catch (error: any) {
+        console.error('SQL Execution error:', error);
+        setOutput(`Erro ao executar SQL:\n${error.message || 'Erro de conexão com o SqlExecutor'}`);
       }
+    } else {
+      // Use Execution Service for C# code
+      setOutput('Compilando e executando código C#...\n');
       
-      // Try to parse JSON
-      const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        const text = await response.text();
-        console.error('Non-JSON response:', text);
-        setOutput(`Erro: Resposta não é JSON\n${text}`);
-        return;
+      try {
+        const response = await fetch('http://localhost:5006/api/code/execute', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            Code: code
+          }),
+        });
+        
+        console.log('C# Response status:', response.status);
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('C# Error response:', errorText);
+          setOutput(`Erro HTTP ${response.status}:\n${errorText || 'Erro desconhecido'}`);
+          return;
+        }
+        
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+          const text = await response.text();
+          console.error('Non-JSON response:', text);
+          setOutput(`Erro: Resposta não é JSON\n${text}`);
+          return;
+        }
+        
+        const result = await response.json();
+        console.log('C# Execution result:', result);
+        
+        if (result.status === 'Completed') {
+          setOutput(result.output || 'Execução concluída sem output.');
+        } else {
+          setOutput(`Erro:\n${result.error || 'Erro desconhecido'}`);
+        }
+      } catch (error: any) {
+        console.error('C# Execution error:', error);
+        setOutput(`Erro ao executar código:\n${error.message || 'Erro de conexão com o serviço de execução'}`);
       }
-      
-      const result = await response.json();
-      console.log('Execution result:', result);
-      
-      if (result.success) {
-        setOutput(result.output || 'Execução concluída sem output.');
-      } else {
-        setOutput(`Erro:\n${result.error || 'Erro desconhecido'}`);
-      }
-    } catch (error: any) {
-      console.error('Execution error:', error);
-      setOutput(`Erro ao executar código:\n${error.message || 'Erro de conexão com o serviço de execução'}`);
-    } finally {
-      setIsRunning(false);
     }
+    
+    setIsRunning(false);
   };
 
   const handleStartExercise = (exercise: Exercise) => {

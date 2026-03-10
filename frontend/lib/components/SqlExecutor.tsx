@@ -108,19 +108,46 @@ export function SqlExecutor() {
       setLoading(true);
       setResult(null);
 
-      const response = await fetch('http://localhost:5000/api/sql/execute', {
+      const response = await fetch('http://localhost:5008/api/sql/execute', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          query: sqlQuery,
-          userId: '00000000-0000-0000-0000-000000000001'
+          Query: sqlQuery
         })
       });
 
       const data = await response.json();
-      setResult(data);
+      
+      // Adaptar resposta do SqlExecutor REAL para o formato esperado
+      if (data.success) {
+        if (data.data && Array.isArray(data.data)) {
+          // SELECT query - converter para formato de tabela
+          const adaptedResult = {
+            success: true,
+            columns: data.data.length > 0 ? Object.keys(data.data[0]) : [],
+            rows: data.data.map(row => Object.values(row)),
+            rowsAffected: data.rowsAffected,
+            message: data.message,
+            executionTime: data.executionTimeMs
+          };
+          setResult(adaptedResult);
+        } else {
+          // INSERT/UPDATE/DELETE query
+          setResult({
+            success: true,
+            rowsAffected: data.rowsAffected,
+            message: data.message,
+            executionTime: data.executionTimeMs
+          });
+        }
+      } else {
+        setResult({
+          success: false,
+          error: data.error
+        });
+      }
 
       if (data.success) {
         toast.success('Consulta executada!');
