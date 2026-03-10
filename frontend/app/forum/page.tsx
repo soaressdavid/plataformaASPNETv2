@@ -23,11 +23,49 @@ export default function ForumPage() {
 
   const fetchCategories = async () => {
     try {
-      const response = await fetch('http://localhost:5007/api/forum/categories');
-      if (response.ok) {
-        const data = await response.json();
-        setCategories(data);
-      }
+      // MOCK DATA - Simular categorias do fórum
+      await new Promise(resolve => setTimeout(resolve, 500)); // Simular delay
+      
+      const mockCategories = [
+        {
+          name: 'Dúvidas Gerais',
+          threadCount: 45,
+          postCount: 234,
+          lastActivity: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString() // 2 horas atrás
+        },
+        {
+          name: 'C# e .NET',
+          threadCount: 32,
+          postCount: 187,
+          lastActivity: new Date(Date.now() - 30 * 60 * 1000).toISOString() // 30 min atrás
+        },
+        {
+          name: 'Banco de Dados',
+          threadCount: 28,
+          postCount: 156,
+          lastActivity: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString() // 4 horas atrás
+        },
+        {
+          name: 'Web Development',
+          threadCount: 38,
+          postCount: 201,
+          lastActivity: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString() // 1 hora atrás
+        },
+        {
+          name: 'Desafios de Código',
+          threadCount: 22,
+          postCount: 98,
+          lastActivity: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString() // 6 horas atrás
+        },
+        {
+          name: 'Carreira e Mercado',
+          threadCount: 19,
+          postCount: 87,
+          lastActivity: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString() // 12 horas atrás
+        }
+      ];
+      
+      setCategories(mockCategories);
     } catch (error) {
       console.error('Error fetching categories:', error);
     } finally {

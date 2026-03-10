@@ -31,15 +31,18 @@ export function LessonContent({
 }: LessonContentProps) {
   // Debug: Log para verificar o conteúdo
   console.log('=== LESSON CONTENT DEBUG ===');
-  console.log('Lesson:', lesson);
+  console.log('Lesson title:', lesson?.title);
+  console.log('Lesson ID:', lesson?.id);
   console.log('Has structuredContent:', !!lesson.structuredContent);
-  console.log('Has content (HTML):', !!lesson.content);
+  console.log('Has content (HTML/Markdown):', !!lesson.content);
+  console.log('Content length:', lesson.content?.length || 0);
+  console.log('Content preview:', lesson.content?.substring(0, 200) || 'No content');
   if (lesson.structuredContent) {
     console.log('Structured content:', lesson.structuredContent);
   }
   console.log('===========================');
 
-  // Prefer structured content over HTML content
+  // Prefer structured content over HTML content, but also check for regular content
   if (lesson.structuredContent) {
     return (
       <div className="lesson-content-wrapper" style={{ color: '#1f2937' }}>
@@ -52,14 +55,16 @@ export function LessonContent({
     );
   }
 
-  // Fallback to HTML content for legacy lessons
+  // Fallback to HTML/Markdown content for lessons
   if (lesson.content) {
-    console.log('Rendering HTML/Markdown content');
+    console.log('✅ Rendering HTML/Markdown content, length:', lesson.content.length);
     
     // Check if content is markdown (starts with # or contains markdown syntax)
     const isMarkdown = lesson.content.trim().startsWith('#') || 
                        lesson.content.includes('##') ||
                        lesson.content.includes('```');
+    
+    console.log('📝 Content type detected:', isMarkdown ? 'Markdown' : 'HTML');
     
     if (isMarkdown) {
       // Render as markdown

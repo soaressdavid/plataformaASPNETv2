@@ -75,32 +75,22 @@ export default function NewThreadPage() {
 
     setSubmitting(true);
     try {
-      const response = await fetch('http://localhost:5007/api/forum/threads', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title,
-          content,
-          category,
-          authorId: currentUserId
-        })
-      });
+      // MOCK - Simular criação de thread
+      await new Promise(resolve => setTimeout(resolve, 800));
+      
+      const mockThread = {
+        id: `thread_${Date.now()}`,
+        title,
+        content,
+        category,
+        authorId: currentUserId
+      };
 
-      if (response.ok) {
-        const thread = await response.json();
-        toast({
-          title: 'Success',
-          description: 'Thread created successfully'
-        });
-        router.push(`/forum/thread/${thread.id}`);
-      } else {
-        const error = await response.text();
-        toast({
-          title: 'Error',
-          description: error || 'Failed to create thread',
-          variant: 'destructive'
-        });
-      }
+      toast({
+        title: 'Success',
+        description: 'Thread created successfully'
+      });
+      router.push(`/forum/thread/${mockThread.id}`);
     } catch (error) {
       console.error('Error creating thread:', error);
       toast({

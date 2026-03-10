@@ -149,8 +149,8 @@ export default function DashboardPage() {
     );
   }
 
-  const progressPercentage = dashboardData.xpToNextLevel > 0
-    ? (dashboardData.currentXP / (dashboardData.currentXP + dashboardData.xpToNextLevel)) * 100
+  const progressPercentage = (dashboardData.xpToNextLevel || 0) > 0
+    ? ((dashboardData.currentXP || 0) / ((dashboardData.currentXP || 0) + (dashboardData.xpToNextLevel || 0))) * 100
     : 100;
 
   // Render dashboard
@@ -180,7 +180,7 @@ export default function DashboardPage() {
                     Nível {dashboardData.currentLevel}
                   </h2>
                   <p className="text-gray-400 mt-1">
-                    {dashboardData.currentXP.toLocaleString()} XP acumulados
+                    {(dashboardData.currentXP || 0).toLocaleString()} XP acumulados
                   </p>
                 </div>
               </div>
@@ -189,7 +189,7 @@ export default function DashboardPage() {
                   Próximo Nível
                 </p>
                 <p className="text-2xl font-bold text-blue-400">
-                  {dashboardData.xpToNextLevel.toLocaleString()} XP
+                  {(dashboardData.xpToNextLevel || 0).toLocaleString()} XP
                 </p>
               </div>
             </div>
@@ -228,7 +228,7 @@ export default function DashboardPage() {
                     <span className="text-sm text-gray-300 font-medium">Fácil</span>
                   </div>
                   <span className="text-2xl font-bold text-green-400">
-                    {dashboardData.solvedChallenges.easy}
+                    {dashboardData.solvedChallenges?.easy || 0}
                   </span>
                 </div>
                 <div className="flex items-center justify-between p-4 bg-[#21262d] rounded-lg border border-[#30363d]">
@@ -237,7 +237,7 @@ export default function DashboardPage() {
                     <span className="text-sm text-gray-300 font-medium">Médio</span>
                   </div>
                   <span className="text-2xl font-bold text-yellow-400">
-                    {dashboardData.solvedChallenges.medium}
+                    {dashboardData.solvedChallenges?.medium || 0}
                   </span>
                 </div>
                 <div className="flex items-center justify-between p-4 bg-[#21262d] rounded-lg border border-[#30363d]">
@@ -246,16 +246,16 @@ export default function DashboardPage() {
                     <span className="text-sm text-gray-300 font-medium">Difícil</span>
                   </div>
                   <span className="text-2xl font-bold text-red-400">
-                    {dashboardData.solvedChallenges.hard}
+                    {dashboardData.solvedChallenges?.hard || 0}
                   </span>
                 </div>
                 <div className="pt-4 border-t border-[#30363d]">
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-semibold text-gray-100 uppercase tracking-wider">Total</span>
                     <span className="text-3xl font-bold text-blue-400">
-                      {dashboardData.solvedChallenges.easy + 
-                       dashboardData.solvedChallenges.medium + 
-                       dashboardData.solvedChallenges.hard}
+                      {(dashboardData.solvedChallenges?.easy || 0) + 
+                       (dashboardData.solvedChallenges?.medium || 0) + 
+                       (dashboardData.solvedChallenges?.hard || 0)}
                     </span>
                   </div>
                 </div>
@@ -276,7 +276,7 @@ export default function DashboardPage() {
                 <div className="relative">
                   <div className="absolute inset-0 bg-purple-500/20 blur-2xl rounded-full"></div>
                   <span className="relative text-6xl font-bold text-purple-400">
-                    {dashboardData.completedProjects}
+                    {dashboardData.completedProjects || 0}
                   </span>
                 </div>
                 <p className="text-gray-400 mt-4 text-center">
@@ -300,19 +300,19 @@ export default function DashboardPage() {
                   <div className="relative">
                     <div className="absolute inset-0 bg-orange-500/20 blur-2xl rounded-full"></div>
                     <span className="relative text-6xl font-bold text-orange-400">
-                      {dashboardData.learningStreak}
+                      {dashboardData.learningStreak || 0}
                     </span>
                   </div>
                 </div>
               </div>
               <p className="text-gray-400 text-center mb-6">
-                {dashboardData.learningStreak === 1 ? 'dia seguido' : 'dias seguidos'}
+                {(dashboardData.learningStreak || 0) === 1 ? 'dia seguido' : 'dias seguidos'}
               </p>
               
               {/* Calendar Visualization */}
               <div className="flex justify-center gap-2">
                 {Array.from({ length: 7 }).map((_, index) => {
-                  const isActive = index < Math.min(dashboardData.learningStreak, 7);
+                  const isActive = index < Math.min(dashboardData.learningStreak || 0, 7);
                   return (
                     <div
                       key={index}
@@ -333,7 +333,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Courses in Progress */}
-          {dashboardData.coursesInProgress.length > 0 ? (
+          {(dashboardData.coursesInProgress && dashboardData.coursesInProgress.length > 0) ? (
             <div className="bg-[#161b22] border border-[#30363d] rounded-xl p-8 shadow-lg">
               <div className="flex items-center gap-3 mb-6">
                 <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
@@ -351,13 +351,13 @@ export default function DashboardPage() {
                         {course.title}
                       </span>
                       <span className="text-2xl font-bold text-blue-400">
-                        {course.completionPercentage.toFixed(0)}%
+                        {(course.completionPercentage || 0).toFixed(0)}%
                       </span>
                     </div>
                     <div className="w-full bg-[#30363d] rounded-full h-3 overflow-hidden">
                       <div
                         className="bg-gradient-to-r from-blue-500 to-blue-600 h-3 rounded-full transition-all duration-500 shadow-lg"
-                        style={{ width: `${course.completionPercentage}%` }}
+                        style={{ width: `${course.completionPercentage || 0}%` }}
                       ></div>
                     </div>
                   </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 
 interface CountdownTimerProps {
   initialSeconds: number;
@@ -17,6 +17,18 @@ export const CountdownTimer: React.FC<CountdownTimerProps> = ({
 }) => {
   const [remainingSeconds, setRemainingSeconds] = useState(initialSeconds);
 
+  // Memoize callbacks to prevent unnecessary re-renders
+  const handleTimeUp = useCallback(() => {
+    onTimeUp();
+  }, [onTimeUp]);
+
+  const handleTick = useCallback((newValue: number) => {
+    if (onTick) {
+      // Use setTimeout to avoid setState during render
+      setTimeout(() => onTick(newValue), 0);
+    }
+  }, [onTick]);
+
   useEffect(() => {
     if (isPaused || remainingSeconds <= 0) return;
 
@@ -26,20 +38,19 @@ export const CountdownTimer: React.FC<CountdownTimerProps> = ({
         
         if (newValue <= 0) {
           clearInterval(interval);
-          onTimeUp();
+          setTimeout(() => handleTimeUp(), 0);
           return 0;
         }
         
-        if (onTick) {
-          onTick(newValue);
-        }
+        // Call onTick after state update
+        handleTick(newValue);
         
         return newValue;
       });
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [isPaused, remainingSeconds, onTimeUp, onTick]);
+  }, [isPaused, remainingSeconds, handleTimeUp, handleTick]);
 
   const formatTime = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);

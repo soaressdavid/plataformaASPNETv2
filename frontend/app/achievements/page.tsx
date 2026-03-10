@@ -40,8 +40,118 @@ export default function AchievementsPage() {
   const fetchAchievements = async () => {
     try {
       setLoading(true);
-      const response = await apiClient.get('/api/gamification/achievements');
-      setAchievements(response.data);
+      
+      // MOCK DATA - Simular conquistas
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      const mockAchievements = [
+        {
+          id: 1,
+          title: 'Primeiro Passo',
+          description: 'Complete seu primeiro curso',
+          icon: '🎓',
+          category: 'Learning',
+          xpReward: 100,
+          rarity: 'Common',
+          unlockedAt: '2024-02-15T10:30:00Z',
+          isUnlocked: true,
+          progress: 1,
+          maxProgress: 1
+        },
+        {
+          id: 2,
+          title: 'Sequência de Fogo',
+          description: 'Estude por 7 dias consecutivos',
+          icon: '🔥',
+          category: 'Consistency',
+          xpReward: 200,
+          rarity: 'Uncommon',
+          unlockedAt: '2024-02-20T14:15:00Z',
+          isUnlocked: true,
+          progress: 7,
+          maxProgress: 7
+        },
+        {
+          id: 3,
+          title: 'Mestre dos Desafios',
+          description: 'Complete 20 desafios de programação',
+          icon: '⚔️',
+          category: 'Challenges',
+          xpReward: 500,
+          rarity: 'Rare',
+          unlockedAt: null,
+          isUnlocked: false,
+          progress: 18,
+          maxProgress: 20
+        },
+        {
+          id: 4,
+          title: 'Velocista',
+          description: 'Complete um desafio em menos de 2 minutos',
+          icon: '⚡',
+          category: 'Speed',
+          xpReward: 150,
+          rarity: 'Uncommon',
+          unlockedAt: null,
+          isUnlocked: false,
+          progress: 0,
+          maxProgress: 1
+        },
+        {
+          id: 5,
+          title: 'Explorador',
+          description: 'Complete cursos de 3 níveis diferentes',
+          icon: '🗺️',
+          category: 'Exploration',
+          xpReward: 300,
+          rarity: 'Rare',
+          unlockedAt: null,
+          isUnlocked: false,
+          progress: 2,
+          maxProgress: 3
+        },
+        {
+          id: 6,
+          title: 'Perfeccionista',
+          description: 'Complete um curso com 100% de aproveitamento',
+          icon: '💎',
+          category: 'Excellence',
+          xpReward: 400,
+          rarity: 'Epic',
+          unlockedAt: null,
+          isUnlocked: false,
+          progress: 0,
+          maxProgress: 1
+        },
+        {
+          id: 7,
+          title: 'Colaborador',
+          description: 'Ajude 5 colegas no fórum',
+          icon: '🤝',
+          category: 'Community',
+          xpReward: 250,
+          rarity: 'Uncommon',
+          unlockedAt: null,
+          isUnlocked: false,
+          progress: 2,
+          maxProgress: 5
+        },
+        {
+          id: 8,
+          title: 'Lenda',
+          description: 'Alcance o nível 15',
+          icon: '👑',
+          category: 'Mastery',
+          xpReward: 1000,
+          rarity: 'Legendary',
+          unlockedAt: null,
+          isUnlocked: false,
+          progress: 8,
+          maxProgress: 15
+        }
+      ];
+      
+      setAchievements(mockAchievements);
     } catch (error: any) {
       console.error('Failed to fetch achievements:', error);
       toast.error('Failed to load achievements');

@@ -52,23 +52,76 @@ app.MapPost("/api/code/execute", async (HttpContext context, ILogger<Program> lo
         }
 
         logger.LogInformation("Executing real C# code: {CodeLength} characters", request.Code.Length);
+        logger.LogDebug("Original code: {Code}", request.Code);
 
         var startTime = DateTime.UtcNow;
         
         // Preparar código para compilação
-        var fullCode = $@"
-using System;
+        var codeToCompile = request.Code.Trim();
+        
+        // Verificar se o código já tem uma estrutura completa (classe Program com Main)
+        bool hasMainMethod = codeToCompile.Contains("static void Main") || 
+                           codeToCompile.Contains("static async Task Main") ||
+                           codeToCompile.Contains("static int Main") ||
+                           codeToCompile.Contains("static async Task<int> Main");
+        bool hasClassProgram = codeToCompile.Contains("class Program");
+        bool hasUsings = codeToCompile.Contains("using System");
+        
+        string fullCode;
+        
+        if (hasMainMethod && hasClassProgram)
+        {
+            // Código já tem estrutura completa
+            if (hasUsings)
+            {
+                // Já tem usings, usar como está
+                fullCode = codeToCompile;
+            }
+            else
+            {
+                // Adicionar usings necessários
+                fullCode = $@"using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
+
+{codeToCompile}";
+            }
+        }
+        else if (hasMainMethod && !hasClassProgram)
+        {
+            // Tem Main mas não tem classe, envolver em classe
+            fullCode = $@"using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+public class Program
+{{
+{codeToCompile}
+}}";
+        }
+        else
+        {
+            // Código simples, envolver em Main method
+            fullCode = $@"using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
 
 public class Program
 {{
     public static void Main()
     {{
-        {request.Code}
+        {codeToCompile}
     }}
 }}";
+        }
+        
+        logger.LogDebug("Generated code for compilation: {FullCode}", fullCode);
 
         // Compilar código
         var syntaxTree = CSharpSyntaxTree.ParseText(fullCode);
@@ -95,18 +148,30 @@ public class Program
 
         if (!result.Success)
         {
-            var errors = string.Join("\n", result.Diagnostics
+            var errors = result.Diagnostics
                 .Where(d => d.IsWarningAsError || d.Severity == DiagnosticSeverity.Error)
-                .Select(d => $"Line {d.Location.GetLineSpan().StartLinePosition.Line + 1}: {d.GetMessage()}"));
+                .Select(d => {
+                    var lineSpan = d.Location.GetLineSpan();
+                    var line = lineSpan.StartLinePosition.Line + 1;
+                    var message = d.GetMessage();
+                    
+                    // Ajustar número da linha para o código original (subtraindo as linhas de using e classe)
+                    var adjustedLine = Math.Max(1, line - 7);
+                    
+                    return $"Linha {adjustedLine}: {message}";
+                })
+                .ToList();
 
-            logger.LogWarning("Compilation failed: {Errors}", errors);
+            var errorMessage = string.Join("\n", errors);
+            
+            logger.LogWarning("Compilation failed: {Errors}", errorMessage);
 
             return Results.Json(new
             {
                 jobId = Guid.NewGuid().ToString(),
                 status = "Failed",
                 output = "",
-                error = $"Compilation Error:\n{errors}",
+                error = $"Erro de Compilação:\n{errorMessage}",
                 executionTimeMs = (int)(DateTime.UtcNow - startTime).TotalMilliseconds
             }, statusCode: 400);
         }
@@ -114,17 +179,20 @@ public class Program
         // Executar código compilado
         ms.Seek(0, SeekOrigin.Begin);
         var assembly = Assembly.Load(ms.ToArray());
-        var type = assembly.GetType("Program");
-        var method = type?.GetMethod("Main");
+        
+        // Procurar por qualquer classe que tenha um método Main
+        var mainMethod = assembly.GetTypes()
+            .SelectMany(t => t.GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic))
+            .FirstOrDefault(m => m.Name == "Main");
 
-        if (method == null)
+        if (mainMethod == null)
         {
             return Results.Json(new
             {
                 jobId = Guid.NewGuid().ToString(),
                 status = "Failed",
                 output = "",
-                error = "Main method not found",
+                error = "Método Main não encontrado. Certifique-se de que seu código tem um ponto de entrada válido.",
                 executionTimeMs = (int)(DateTime.UtcNow - startTime).TotalMilliseconds
             }, statusCode: 400);
         }
@@ -142,8 +210,19 @@ public class Program
         try
         {
             // Executar com timeout de 10 segundos
-            var task = Task.Run(() => method.Invoke(null, null));
-            var completed = await task.WaitAsync(TimeSpan.FromSeconds(10));
+            var task = Task.Run(() => {
+                if (mainMethod.GetParameters().Length > 0)
+                {
+                    // Main method with string[] args parameter
+                    mainMethod.Invoke(null, new object[] { new string[0] });
+                }
+                else
+                {
+                    // Main method without parameters
+                    mainMethod.Invoke(null, null);
+                }
+            });
+            await task.WaitAsync(TimeSpan.FromSeconds(10));
             
             var output = outputWriter.ToString();
             var errorOutput = errorWriter.ToString();

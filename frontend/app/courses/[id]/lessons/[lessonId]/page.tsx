@@ -48,14 +48,27 @@ export default function LessonPage() {
     
     const content = (lesson.title + ' ' + (lesson.content || '') + ' ' + course.title).toLowerCase();
     
-    // Azure keywords (prioridade 1)
+    console.log('Detecting lesson type for:', {
+      lessonTitle: lesson.title,
+      courseTitle: course.title,
+      content: content.substring(0, 200)
+    });
+    
+    // SQL keywords (prioridade 1 - mais específico primeiro)
+    const sqlKeywords = [
+      'sql', 'database', 'banco de dados', 'select', 'insert', 'update', 'delete',
+      'query', 'consulta', 'tabela', 'table', 'join', 'where', 'entity framework',
+      'ef core', 'linq', 'migration', 'dbcontext', 'stored procedure', 'trigger'
+    ];
+    
+    // Azure keywords (prioridade 2)
     const azureKeywords = [
       'azure', 'app service', 'azure functions', 'azure sql',
       'azure storage', 'azure devops', 'resource group',
       'azure portal', 'subscription', 'arm template'
     ];
     
-    // Terminal/Deploy keywords (prioridade 2)
+    // Terminal/Deploy keywords (prioridade 3)
     const terminalKeywords = [
       'deploy', 'deployment', 'ci/cd', 'pipeline', 'devops',
       'docker', 'container', 'kubernetes', 'k8s',
@@ -64,29 +77,26 @@ export default function LessonPage() {
       'dotnet publish', 'build', 'release'
     ];
     
-    // SQL keywords (prioridade 3)
-    const sqlKeywords = [
-      'sql', 'database', 'banco de dados', 'select', 'insert', 'update', 'delete',
-      'query', 'consulta', 'tabela', 'table', 'join', 'where', 'entity framework',
-      'ef core', 'linq', 'migration', 'dbcontext', 'stored procedure', 'trigger'
-    ];
+    // Verificar SQL primeiro (mais específico)
+    if (sqlKeywords.some(keyword => content.includes(keyword))) {
+      console.log('Detected SQL lesson');
+      return 'sql';
+    }
     
-    // Verificar Azure primeiro
+    // Verificar Azure
     if (azureKeywords.some(keyword => content.includes(keyword))) {
+      console.log('Detected Azure lesson');
       return 'azure';
     }
     
     // Verificar Terminal/Deploy
     if (terminalKeywords.some(keyword => content.includes(keyword))) {
+      console.log('Detected Terminal lesson');
       return 'terminal';
     }
     
-    // Verificar SQL
-    if (sqlKeywords.some(keyword => content.includes(keyword))) {
-      return 'sql';
-    }
-    
     // Default: C#
+    console.log('Detected C# lesson (default)');
     return 'csharp';
   };
 
@@ -102,6 +112,12 @@ export default function LessonPage() {
     // Update lesson state when structuredLesson is loaded
     if (structuredLesson) {
       const isComplete = isLessonComplete(courseId, lessonId);
+      console.log('🔍 Setting lesson from structuredLesson:', {
+        title: structuredLesson.title,
+        hasContent: !!structuredLesson.content,
+        contentLength: structuredLesson.content?.length || 0,
+        contentPreview: structuredLesson.content?.substring(0, 100) || 'No content'
+      });
       setLesson({ ...structuredLesson, isCompleted: isComplete });
     }
   }, [structuredLesson, courseId, lessonId]);

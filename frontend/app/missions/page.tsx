@@ -38,8 +38,84 @@ export default function MissionsPage() {
   const fetchMissions = async () => {
     try {
       setLoading(true);
-      const response = await apiClient.get('/api/gamification/missions');
-      setMissions(response.data);
+      
+      // MOCK DATA - Simular missões
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      const mockMissions = [
+        {
+          id: 1,
+          title: 'Primeiro Desafio',
+          description: 'Complete seu primeiro desafio de programação',
+          type: 'challenge',
+          targetValue: 1,
+          currentProgress: 1,
+          xpReward: 100,
+          isCompleted: true,
+          canClaim: false,
+          difficulty: 'Easy',
+          category: 'Getting Started',
+          deadline: null
+        },
+        {
+          id: 2,
+          title: 'Sequência de Estudos',
+          description: 'Estude por 7 dias consecutivos',
+          type: 'streak',
+          targetValue: 7,
+          currentProgress: 7,
+          xpReward: 200,
+          isCompleted: true,
+          canClaim: true,
+          difficulty: 'Medium',
+          category: 'Consistency',
+          deadline: null
+        },
+        {
+          id: 3,
+          title: 'Mestre dos Algoritmos',
+          description: 'Complete 10 desafios de algoritmos',
+          type: 'challenge',
+          targetValue: 10,
+          currentProgress: 6,
+          xpReward: 500,
+          isCompleted: false,
+          canClaim: false,
+          difficulty: 'Hard',
+          category: 'Algorithms',
+          deadline: '2024-03-31'
+        },
+        {
+          id: 4,
+          title: 'Explorador de Cursos',
+          description: 'Complete 3 cursos diferentes',
+          type: 'course',
+          targetValue: 3,
+          currentProgress: 2,
+          xpReward: 300,
+          isCompleted: false,
+          canClaim: false,
+          difficulty: 'Medium',
+          category: 'Learning',
+          deadline: null
+        },
+        {
+          id: 5,
+          title: 'Velocista',
+          description: 'Complete um desafio em menos de 2 minutos',
+          type: 'time_attack',
+          targetValue: 1,
+          currentProgress: 0,
+          xpReward: 150,
+          isCompleted: false,
+          canClaim: false,
+          difficulty: 'Hard',
+          category: 'Speed',
+          deadline: null
+        }
+      ];
+      
+      setMissions(mockMissions);
     } catch (error) {
       console.error('Failed to fetch missions:', error);
       toast.error('Failed to load missions');
@@ -50,9 +126,20 @@ export default function MissionsPage() {
 
   const handleClaimReward = async (missionId: number) => {
     try {
-      await apiClient.post(`/api/gamification/missions/${missionId}/claim`);
-      toast.success('Reward claimed! +XP');
-      fetchMissions(); // Refresh missions
+      // MOCK - Simular claim de recompensa
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      const mission = missions.find(m => m.id === missionId);
+      if (mission) {
+        toast.success(`Reward claimed! +${mission.xpReward} XP`);
+        
+        // Atualizar a missão localmente
+        setMissions(prev => prev.map(m => 
+          m.id === missionId 
+            ? { ...m, canClaim: false }
+            : m
+        ));
+      }
     } catch (error) {
       console.error('Failed to claim reward:', error);
       toast.error('Failed to claim reward');

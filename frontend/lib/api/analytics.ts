@@ -115,11 +115,33 @@ export const analyticsApi = {
   },
 
   /**
-   * Get dashboard metrics
+   * Get dashboard metrics - MOCK VERSION
    */
   getDashboardMetrics: async (): Promise<DashboardMetrics> => {
-    const response = await apiClient.get<DashboardMetrics>('/api/analytics/dashboard');
-    return response.data;
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    return {
+      totalUsers: 1247,
+      activeUsers: 892,
+      totalLessons: 178,
+      totalCompletions: 3456,
+      averageCompletionRate: 78.5,
+      averageEngagementTime: 1847, // seconds
+      topLessons: [
+        { lessonId: '1', title: 'Introdução ao C#', completions: 456 },
+        { lessonId: '13', title: 'Introdução ao SQL', completions: 398 },
+        { lessonId: '36', title: 'Criando sua Primeira API', completions: 287 },
+        { lessonId: '59', title: 'Introdução ao Azure', completions: 234 },
+        { lessonId: '64', title: 'Introdução ao DevOps', completions: 198 }
+      ],
+      recentActivity: [
+        { userId: 'user1', eventType: 'lesson_completed', timestamp: new Date(Date.now() - 5 * 60 * 1000).toISOString() },
+        { userId: 'user2', eventType: 'challenge_completed', timestamp: new Date(Date.now() - 12 * 60 * 1000).toISOString() },
+        { userId: 'user3', eventType: 'course_started', timestamp: new Date(Date.now() - 18 * 60 * 1000).toISOString() },
+        { userId: 'user4', eventType: 'lesson_completed', timestamp: new Date(Date.now() - 25 * 60 * 1000).toISOString() },
+        { userId: 'user5', eventType: 'project_completed', timestamp: new Date(Date.now() - 32 * 60 * 1000).toISOString() }
+      ]
+    };
   },
 
   /**

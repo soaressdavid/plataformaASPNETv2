@@ -64,14 +64,37 @@ export default function ProfilePage() {
 
   const fetchProfile = async () => {
     try {
-      const response = await apiClient.get('/api/users/profile');
-      setProfile(response.data);
+      // MOCK DATA - Simular perfil do usuário
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      const mockProfile = {
+        id: 1,
+        name: 'João Silva',
+        email: 'joao.silva@email.com',
+        level: 8,
+        totalXP: 8750,
+        currentStreak: 7,
+        longestStreak: 12,
+        joinedAt: '2024-01-15',
+        completedChallenges: 18,
+        completedLessons: 45,
+        totalProjects: 3,
+        badges: 8,
+        rank: 156,
+        bio: 'Desenvolvedor apaixonado por tecnologia e aprendizado contínuo. Sempre em busca de novos desafios e oportunidades de crescimento.',
+        location: 'São Paulo, Brasil',
+        website: 'https://joaosilva.dev',
+        github: 'joaosilva',
+        linkedin: 'joao-silva-dev'
+      };
+      
+      setProfile(mockProfile);
       setEditForm({
-        bio: response.data.bio || '',
-        location: response.data.location || '',
-        website: response.data.website || '',
-        github: response.data.github || '',
-        linkedin: response.data.linkedin || '',
+        bio: mockProfile.bio || '',
+        location: mockProfile.location || '',
+        website: mockProfile.website || '',
+        github: mockProfile.github || '',
+        linkedin: mockProfile.linkedin || '',
       });
     } catch (error) {
       console.error('Failed to fetch profile:', error);
@@ -83,8 +106,53 @@ export default function ProfilePage() {
 
   const fetchActivities = async () => {
     try {
-      const response = await apiClient.get('/api/users/activity');
-      setActivities(response.data);
+      // MOCK DATA - Simular atividades do usuário
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
+      const mockActivities = [
+        {
+          id: 1,
+          type: 'challenge' as const,
+          title: 'Resolveu o desafio "Soma de Dois Números"',
+          description: 'Tempo: 3min 45s - Excelente performance!',
+          xpGained: 50,
+          timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
+        },
+        {
+          id: 2,
+          type: 'lesson' as const,
+          title: 'Concluiu a aula "Variáveis e Tipos de Dados"',
+          description: 'Curso: Fundamentos de C#',
+          xpGained: 25,
+          timestamp: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString()
+        },
+        {
+          id: 3,
+          type: 'achievement' as const,
+          title: 'Conquistou "Sequência de 7 dias"',
+          description: 'Você estudou por 7 dias consecutivos!',
+          xpGained: 100,
+          timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+        },
+        {
+          id: 4,
+          type: 'project' as const,
+          title: 'Completou o projeto "Sistema de Login"',
+          description: 'Projeto prático do curso ASP.NET Core',
+          xpGained: 200,
+          timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString()
+        },
+        {
+          id: 5,
+          type: 'challenge' as const,
+          title: 'Resolveu o desafio "Número Par ou Ímpar"',
+          description: 'Primeira tentativa - Perfeito!',
+          xpGained: 75,
+          timestamp: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString()
+        }
+      ];
+      
+      setActivities(mockActivities);
     } catch (error) {
       console.error('Failed to fetch activities:', error);
     }
@@ -92,10 +160,23 @@ export default function ProfilePage() {
 
   const handleSaveProfile = async () => {
     try {
-      await apiClient.put('/api/users/profile', editForm);
+      // MOCK - Simular salvamento
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
       toast.success('Profile updated successfully');
       setIsEditing(false);
-      fetchProfile();
+      
+      // Atualizar o perfil local com os novos dados
+      if (profile) {
+        setProfile({
+          ...profile,
+          bio: editForm.bio,
+          location: editForm.location,
+          website: editForm.website,
+          github: editForm.github,
+          linkedin: editForm.linkedin,
+        });
+      }
     } catch (error) {
       console.error('Failed to update profile:', error);
       toast.error('Failed to update profile');

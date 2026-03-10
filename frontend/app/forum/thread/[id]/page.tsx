@@ -76,17 +76,86 @@ export default function ThreadPage() {
 
   const fetchThread = async () => {
     try {
-      const response = await fetch(`http://localhost:5007/api/forum/threads/${threadId}`);
-      if (response.ok) {
-        const data = await response.json();
-        setThread(data);
-      } else {
-        toast({
-          title: 'Error',
-          description: 'Failed to load thread',
-          variant: 'destructive'
-        });
-      }
+      // MOCK DATA - Simular thread do fórum
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      const mockThread = {
+        id: threadId,
+        title: 'Como resolver problemas de performance em consultas SQL?',
+        content: `Estou enfrentando problemas de performance em algumas consultas SQL complexas. 
+        
+As consultas envolvem múltiplos JOINs e estão demorando muito para executar. Já tentei alguns índices mas não vi melhoria significativa.
+
+Alguém tem dicas de otimização? Estou usando SQL Server.
+
+\`\`\`sql
+SELECT c.Nome, p.DataPedido, pr.Nome as Produto
+FROM Clientes c
+INNER JOIN Pedidos p ON c.ClienteID = p.ClienteID  
+INNER JOIN ItensPedido ip ON p.PedidoID = ip.PedidoID
+INNER JOIN Produtos pr ON ip.ProdutoID = pr.ProdutoID
+WHERE p.DataPedido >= '2024-01-01'
+ORDER BY p.DataPedido DESC
+\`\`\``,
+        author: {
+          id: 'user1',
+          username: 'DevIniciante',
+          avatar: null
+        },
+        category: 'Banco de Dados',
+        createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+        updatedAt: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
+        upvotes: 5,
+        isUpvoted: false,
+        posts: [
+          {
+            id: 'post1',
+            content: `Ótima pergunta! Algumas dicas para otimizar essa consulta:
+
+1. **Índices compostos**: Crie índices que cubram as colunas usadas nos JOINs
+2. **Estatísticas atualizadas**: Execute UPDATE STATISTICS nas tabelas
+3. **Plano de execução**: Analise o plano para identificar gargalos
+
+\`\`\`sql
+-- Exemplo de índice composto
+CREATE INDEX IX_Pedidos_Cliente_Data 
+ON Pedidos (ClienteID, DataPedido DESC)
+\`\`\`
+
+Isso deve melhorar significativamente a performance!`,
+            author: {
+              id: 'user2',
+              username: 'SQLExpert',
+              avatar: null
+            },
+            createdAt: new Date(Date.now() - 1.5 * 60 * 60 * 1000).toISOString(),
+            upvotes: 8,
+            isUpvoted: true,
+            isBestAnswer: true
+          },
+          {
+            id: 'post2',
+            content: `Complementando a resposta do @SQLExpert, também recomendo:
+
+- Usar EXPLAIN PLAN para analisar o custo das operações
+- Considerar particionamento se as tabelas são muito grandes
+- Avaliar se todos os JOINs são realmente necessários
+
+Qual é o tamanho aproximado das suas tabelas?`,
+            author: {
+              id: 'user3',
+              username: 'DBAMaster',
+              avatar: null
+            },
+            createdAt: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
+            upvotes: 3,
+            isUpvoted: false,
+            isBestAnswer: false
+          }
+        ]
+      };
+      
+      setThread(mockThread);
     } catch (error) {
       console.error('Error fetching thread:', error);
       toast({

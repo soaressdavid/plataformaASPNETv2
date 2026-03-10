@@ -57,19 +57,82 @@ function PortfolioContent() {
   const fetchPortfolioData = async () => {
     try {
       setLoading(true);
+      // MOCK DATA - Simular dados do portfolio
+      await new Promise(resolve => setTimeout(resolve, 400));
       
-      // Fetch portfolio stats
-      const statsResponse = await apiClient.get('/api/portfolio/stats');
-      setStats(statsResponse.data);
+      // Mock portfolio stats
+      const mockStats = {
+        totalProjects: 3,
+        completedProjects: 2,
+        inProgressProjects: 1,
+        totalXP: 8750,
+        certificatesEarned: 2,
+        skillsLearned: 12,
+        averageScore: 87.5,
+        timeSpent: 156 // horas
+      };
+      
+      setStats(mockStats);
 
-      // Fetch completed projects
-      const projectsResponse = await apiClient.get('/api/portfolio/projects');
+      // Mock completed projects
+      const mockProjects = [
+        {
+          id: 1,
+          title: 'Sistema de Login com ASP.NET Core',
+          description: 'Sistema completo de autenticação e autorização usando JWT tokens',
+          technologies: ['C#', 'ASP.NET Core', 'Entity Framework', 'SQL Server'],
+          completedAt: '2024-02-15',
+          score: 95,
+          difficulty: 'Intermediário',
+          category: 'Backend',
+          githubUrl: 'https://github.com/joaosilva/login-system',
+          liveUrl: null,
+          screenshots: ['/projects/login-system-1.png', '/projects/login-system-2.png']
+        },
+        {
+          id: 2,
+          title: 'API REST para E-commerce',
+          description: 'API completa para sistema de e-commerce com produtos, pedidos e pagamentos',
+          technologies: ['C#', 'ASP.NET Core', 'PostgreSQL', 'Docker'],
+          completedAt: '2024-01-28',
+          score: 88,
+          difficulty: 'Avançado',
+          category: 'Backend',
+          githubUrl: 'https://github.com/joaosilva/ecommerce-api',
+          liveUrl: 'https://ecommerce-api-demo.herokuapp.com',
+          screenshots: ['/projects/ecommerce-api-1.png']
+        }
+      ];
 
-      setProjects(projectsResponse.data);
+      setProjects(mockProjects);
 
-      // Fetch certificates
-      const certificatesResponse = await apiClient.get('/api/portfolio/certificates');
-      setCertificates(certificatesResponse.data);
+      // Mock certificates
+      const mockCertificates = [
+        {
+          id: 1,
+          title: 'Fundamentos de C#',
+          description: 'Certificado de conclusão do curso de Fundamentos de Programação C#',
+          issuedAt: '2024-02-20',
+          courseId: '1',
+          score: 92,
+          credentialId: 'CERT-CS-001-2024',
+          validUntil: null,
+          skills: ['C#', 'POO', 'LINQ', 'Async/Await']
+        },
+        {
+          id: 2,
+          title: 'Banco de Dados com SQL',
+          description: 'Certificado de conclusão do curso de Banco de Dados com SQL',
+          issuedAt: '2024-01-30',
+          courseId: '2',
+          score: 89,
+          credentialId: 'CERT-SQL-002-2024',
+          validUntil: null,
+          skills: ['SQL', 'Relacionamentos', 'Índices', 'Stored Procedures']
+        }
+      ];
+      
+      setCertificates(mockCertificates);
     } catch (error) {
       console.error('Error fetching portfolio:', error);
       toast.error('Failed to load portfolio data');
@@ -80,19 +143,13 @@ function PortfolioContent() {
 
   const downloadCertificate = async (certificateId: number) => {
     try {
-      const response = await apiClient.get(`/api/portfolio/certificates/${certificateId}/download`, {
-        responseType: 'blob'
-      });
+      // MOCK - Simular download de certificado
+      await new Promise(resolve => setTimeout(resolve, 500));
       
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `certificate-${certificateId}.pdf`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
+      toast.success('Certificate download started! (Mock)');
       
-      toast.success('Certificate downloaded successfully!');
+      // Em uma implementação real, isso faria o download do PDF
+      console.log(`Downloading certificate ${certificateId}`);
     } catch (error) {
       console.error('Error downloading certificate:', error);
       toast.error('Failed to download certificate');
