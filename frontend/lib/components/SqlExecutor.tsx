@@ -21,7 +21,7 @@ interface DatabaseTable {
 }
 
 export function SqlExecutor() {
-  const [sqlQuery, setSqlQuery] = useState('-- Escreva sua consulta SQL aqui\nSELECT TOP 10 * FROM Users;');
+  const [sqlQuery, setSqlQuery] = useState('-- Exemplo: Relacionamento entre tabelas\n-- Buscar pedidos com informações do cliente\nSELECT \n  c.Nome as Cliente,\n  p.PedidoID,\n  p.DataPedido,\n  p.Valor,\n  p.Status\nFROM Clientes c\nINNER JOIN Pedidos p ON c.ClienteID = p.ClienteID\nORDER BY p.DataPedido DESC\nLIMIT 5;');
   const [result, setResult] = useState<QueryResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'query' | 'results' | 'messages'>('query');
@@ -34,54 +34,74 @@ export function SqlExecutor() {
       name: 'Users',
       schema: 'dbo',
       columns: [
-        { name: 'Id', type: 'uniqueidentifier', nullable: false },
-        { name: 'Name', type: 'nvarchar(100)', nullable: false },
-        { name: 'Email', type: 'nvarchar(255)', nullable: false },
-        { name: 'PasswordHash', type: 'nvarchar(max)', nullable: false },
-        { name: 'CreatedAt', type: 'datetime2', nullable: false },
-        { name: 'IsActive', type: 'bit', nullable: false },
+        { name: 'Id', type: 'INTEGER', nullable: false },
+        { name: 'Name', type: 'TEXT', nullable: false },
+        { name: 'Email', type: 'TEXT', nullable: false },
+        { name: 'Age', type: 'INTEGER', nullable: true },
+        { name: 'CreatedAt', type: 'DATETIME', nullable: false },
+      ]
+    },
+    {
+      name: 'Clientes',
+      schema: 'dbo',
+      columns: [
+        { name: 'ClienteID', type: 'INTEGER', nullable: false },
+        { name: 'Nome', type: 'TEXT', nullable: false },
+        { name: 'Email', type: 'TEXT', nullable: true },
+        { name: 'Telefone', type: 'TEXT', nullable: true },
+        { name: 'DataCadastro', type: 'DATETIME', nullable: false },
+      ]
+    },
+    {
+      name: 'Pedidos',
+      schema: 'dbo',
+      columns: [
+        { name: 'PedidoID', type: 'INTEGER', nullable: false },
+        { name: 'ClienteID', type: 'INTEGER', nullable: false },
+        { name: 'DataPedido', type: 'DATE', nullable: false },
+        { name: 'Valor', type: 'DECIMAL(10,2)', nullable: false },
+        { name: 'Status', type: 'TEXT', nullable: false },
+      ]
+    },
+    {
+      name: 'Produtos',
+      schema: 'dbo',
+      columns: [
+        { name: 'ProdutoID', type: 'INTEGER', nullable: false },
+        { name: 'Nome', type: 'TEXT', nullable: false },
+        { name: 'Preco', type: 'DECIMAL(10,2)', nullable: false },
+        { name: 'Estoque', type: 'INTEGER', nullable: false },
+        { name: 'Categoria', type: 'TEXT', nullable: true },
       ]
     },
     {
       name: 'Courses',
       schema: 'dbo',
       columns: [
-        { name: 'Id', type: 'uniqueidentifier', nullable: false },
-        { name: 'Title', type: 'nvarchar(200)', nullable: false },
-        { name: 'Description', type: 'nvarchar(max)', nullable: true },
-        { name: 'Level', type: 'int', nullable: false },
-        { name: 'CreatedAt', type: 'datetime2', nullable: false },
-      ]
-    },
-    {
-      name: 'Lessons',
-      schema: 'dbo',
-      columns: [
-        { name: 'Id', type: 'uniqueidentifier', nullable: false },
-        { name: 'CourseId', type: 'uniqueidentifier', nullable: false },
-        { name: 'Title', type: 'nvarchar(200)', nullable: false },
-        { name: 'Content', type: 'nvarchar(max)', nullable: true },
-        { name: 'Order', type: 'int', nullable: false },
+        { name: 'Id', type: 'INTEGER', nullable: false },
+        { name: 'Title', type: 'TEXT', nullable: false },
+        { name: 'Description', type: 'TEXT', nullable: true },
+        { name: 'Level', type: 'INTEGER', nullable: false },
       ]
     },
     {
       name: 'Enrollments',
       schema: 'dbo',
       columns: [
-        { name: 'Id', type: 'uniqueidentifier', nullable: false },
-        { name: 'UserId', type: 'uniqueidentifier', nullable: false },
-        { name: 'CourseId', type: 'uniqueidentifier', nullable: false },
-        { name: 'EnrolledAt', type: 'datetime2', nullable: false },
-        { name: 'CompletedAt', type: 'datetime2', nullable: true },
+        { name: 'Id', type: 'INTEGER', nullable: false },
+        { name: 'UserId', type: 'INTEGER', nullable: false },
+        { name: 'CourseId', type: 'INTEGER', nullable: false },
+        { name: 'Progress', type: 'INTEGER', nullable: false },
       ]
     },
   ];
 
   const exampleQueries = [
-    { label: 'Todos Usuários', query: 'SELECT TOP 10 * FROM Users;' },
-    { label: 'Usuários Ativos', query: 'SELECT Id, Name, Email, CreatedAt\nFROM Users\nWHERE IsActive = 1\nORDER BY CreatedAt DESC;' },
-    { label: 'Cursos por Nível', query: 'SELECT Level, COUNT(*) as TotalCursos\nFROM Courses\nGROUP BY Level\nORDER BY Level;' },
-    { label: 'JOIN Completo', query: 'SELECT TOP 10\n  u.Name as Usuario,\n  c.Title as Curso,\n  e.EnrolledAt as DataMatricula\nFROM Users u\nINNER JOIN Enrollments e ON u.Id = e.UserId\nINNER JOIN Courses c ON e.CourseId = c.Id\nORDER BY e.EnrolledAt DESC;' },
+    { label: 'Todos Clientes', query: 'SELECT * FROM Clientes;' },
+    { label: 'Pedidos com Cliente', query: 'SELECT \n  p.PedidoID,\n  c.Nome as Cliente,\n  p.DataPedido,\n  p.Valor,\n  p.Status\nFROM Pedidos p\nINNER JOIN Clientes c ON p.ClienteID = c.ClienteID\nORDER BY p.DataPedido DESC;' },
+    { label: 'Total por Cliente', query: 'SELECT \n  c.Nome,\n  COUNT(p.PedidoID) as TotalPedidos,\n  SUM(p.Valor) as ValorTotal\nFROM Clientes c\nLEFT JOIN Pedidos p ON c.ClienteID = p.ClienteID\nGROUP BY c.ClienteID, c.Nome\nORDER BY ValorTotal DESC;' },
+    { label: 'Produtos em Estoque', query: 'SELECT Nome, Preco, Estoque, Categoria\nFROM Produtos\nWHERE Estoque > 0\nORDER BY Categoria, Nome;' },
+    { label: 'Inserir Novo Cliente', query: 'INSERT INTO Clientes (Nome, Email, Telefone) \nVALUES (\'Carlos Silva\', \'carlos@email.com\', \'(11) 99999-5555\');\n\n-- Verificar se foi inserido\nSELECT * FROM Clientes WHERE Nome = \'Carlos Silva\';' },
   ];
 
   const toggleTable = (tableName: string) => {
@@ -328,20 +348,34 @@ export function SqlExecutor() {
         <details className="text-xs">
           <summary className="cursor-pointer font-semibold text-blue-900 mb-2 hover:text-blue-700 flex items-center gap-2">
             <Icons.Table className="w-4 h-4" />
-            Tabelas Disponíveis
+            Tabelas Disponíveis (Banco Real)
           </summary>
           <div className="space-y-1 mt-2">
             <div className="p-2 bg-white rounded text-xs border border-blue-100">
+              <div className="font-semibold text-gray-900">Clientes</div>
+              <div className="text-gray-700">ClienteID, Nome, Email, Telefone</div>
+              <div className="text-gray-500 text-xs">4 registros • Relaciona com Pedidos</div>
+            </div>
+            <div className="p-2 bg-white rounded text-xs border border-blue-100">
+              <div className="font-semibold text-gray-900">Pedidos</div>
+              <div className="text-gray-700">PedidoID, ClienteID, DataPedido, Valor, Status</div>
+              <div className="text-gray-500 text-xs">6 registros • FK: ClienteID → Clientes</div>
+            </div>
+            <div className="p-2 bg-white rounded text-xs border border-blue-100">
+              <div className="font-semibold text-gray-900">Produtos</div>
+              <div className="text-gray-700">ProdutoID, Nome, Preco, Estoque, Categoria</div>
+              <div className="text-gray-500 text-xs">5 registros • Eletrônicos, Móveis, etc</div>
+            </div>
+            <div className="p-2 bg-white rounded text-xs border border-blue-100">
               <div className="font-semibold text-gray-900">Users</div>
-              <div className="text-gray-700">Id, Name, Email, CreatedAt</div>
+              <div className="text-gray-700">Id, Name, Email, Age</div>
+              <div className="text-gray-500 text-xs">5 registros • Sistema de usuários</div>
             </div>
-            <div className="p-2 bg-white rounded text-xs border border-blue-100">
-              <div className="font-semibold text-gray-900">Courses</div>
-              <div className="text-gray-700">Id, Title, Description, Level</div>
-            </div>
-            <div className="p-2 bg-white rounded text-xs border border-blue-100">
-              <div className="font-semibold text-gray-900">Lessons</div>
-              <div className="text-gray-700">Id, CourseId, Title, Content</div>
+          </div>
+          <div className="mt-2 p-2 bg-green-50 rounded border border-green-200">
+            <div className="text-green-800 font-semibold text-xs">💡 Dica:</div>
+            <div className="text-green-700 text-xs">
+              Todas as tabelas são REAIS! Você pode fazer INSERT, UPDATE, DELETE e ver os dados persistirem.
             </div>
           </div>
         </details>

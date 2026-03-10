@@ -212,6 +212,35 @@ void InitializeDatabase(string dbPath)
             FOREIGN KEY (CourseId) REFERENCES Courses(Id)
         );
 
+        -- Tabela Clientes (para exemplos de relacionamento)
+        CREATE TABLE IF NOT EXISTS Clientes (
+            ClienteID INTEGER PRIMARY KEY AUTOINCREMENT,
+            Nome TEXT NOT NULL,
+            Email TEXT,
+            Telefone TEXT,
+            DataCadastro DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        -- Tabela Pedidos (relacionada com Clientes)
+        CREATE TABLE IF NOT EXISTS Pedidos (
+            PedidoID INTEGER PRIMARY KEY AUTOINCREMENT,
+            ClienteID INTEGER NOT NULL,
+            DataPedido DATE NOT NULL,
+            Valor DECIMAL(10,2) NOT NULL,
+            Status TEXT DEFAULT 'Pendente',
+            FOREIGN KEY (ClienteID) REFERENCES Clientes(ClienteID)
+        );
+
+        -- Tabela Produtos
+        CREATE TABLE IF NOT EXISTS Produtos (
+            ProdutoID INTEGER PRIMARY KEY AUTOINCREMENT,
+            Nome TEXT NOT NULL,
+            Preco DECIMAL(10,2) NOT NULL,
+            Estoque INTEGER NOT NULL DEFAULT 0,
+            Categoria TEXT,
+            DataCadastro DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
         -- Inserir dados de exemplo se não existirem
         INSERT OR IGNORE INTO Users (Id, Name, Email, Age) VALUES 
         (1, 'Alice Johnson', 'alice@example.com', 25),
@@ -234,6 +263,30 @@ void InitializeDatabase(string dbPath)
         (3, 3, 80),
         (4, 4, 60),
         (5, 1, 30);
+
+        -- Inserir dados de exemplo para Clientes
+        INSERT OR IGNORE INTO Clientes (ClienteID, Nome, Email, Telefone) VALUES 
+        (1, 'João Silva', 'joao.silva@email.com', '(11) 99999-1111'),
+        (2, 'Maria Santos', 'maria.santos@email.com', '(11) 99999-2222'),
+        (3, 'Pedro Oliveira', 'pedro.oliveira@email.com', '(11) 99999-3333'),
+        (4, 'Ana Costa', 'ana.costa@email.com', '(11) 99999-4444');
+
+        -- Inserir dados de exemplo para Pedidos
+        INSERT OR IGNORE INTO Pedidos (PedidoID, ClienteID, DataPedido, Valor, Status) VALUES 
+        (101, 1, '2024-01-20', 150.00, 'Concluído'),
+        (102, 1, '2024-01-22', 200.00, 'Concluído'),
+        (103, 2, '2024-01-21', 75.50, 'Pendente'),
+        (104, 3, '2024-01-23', 320.00, 'Concluído'),
+        (105, 2, '2024-01-24', 89.90, 'Enviado'),
+        (106, 4, '2024-01-25', 450.00, 'Pendente');
+
+        -- Inserir dados de exemplo para Produtos
+        INSERT OR IGNORE INTO Produtos (ProdutoID, Nome, Preco, Estoque, Categoria) VALUES 
+        (1, 'Notebook Dell', 2500.00, 10, 'Eletrônicos'),
+        (2, 'Mouse Logitech', 89.90, 50, 'Periféricos'),
+        (3, 'Teclado Mecânico', 299.00, 25, 'Periféricos'),
+        (4, 'Monitor 24 polegadas', 899.00, 15, 'Eletrônicos'),
+        (5, 'Cadeira Gamer', 750.00, 8, 'Móveis');
     ";
 
     using var command = connection.CreateCommand();
@@ -241,6 +294,7 @@ void InitializeDatabase(string dbPath)
     command.ExecuteNonQuery();
     
     Console.WriteLine($"SQLite database initialized at: {Path.GetFullPath(dbPath)}");
+    Console.WriteLine("Tabelas criadas: Users, Courses, Enrollments, Clientes, Pedidos, Produtos");
 }
 
 public class SqlRequest
