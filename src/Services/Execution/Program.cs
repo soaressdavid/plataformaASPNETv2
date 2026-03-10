@@ -3,10 +3,12 @@ using Shared.Metrics;
 using Shared.HealthChecks;
 using Shared.Configuration;
 using Execution.Service;
-using Execution.Service.Services;
 using System.Text.Json;
-using Docker.DotNet;
-using StackExchange.Redis;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using System.Reflection;
+using System.Text;
+using System.Diagnostics;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.ConfigureSerilog("ExecutionService");
@@ -21,28 +23,9 @@ builder.Services.AddCors(options =>
     });
 });
 
-// Configure Redis
-var redisConfig = builder.Configuration.GetSection("Redis").Get<RedisConfiguration>() ?? new RedisConfiguration();
-var redisConnection = RedisConnectionFactory.GetConnection(redisConfig);
-builder.Services.AddSingleton<IConnectionMultiplexer>(redisConnection);
-
-// Configure Docker client
-// Windows uses named pipe, Linux uses Unix socket
-var dockerUri = OperatingSystem.IsWindows() 
-    ? new Uri("npipe://./pipe/docker_engine")
-    : new Uri("unix:///var/run/docker.sock");
-var dockerClient = new DockerClientConfiguration(dockerUri).CreateClient();
-builder.Services.AddSingleton<IDockerClient>(dockerClient);
-
-// Register services
-builder.Services.AddSingleton<SimpleCodeExecutor>();
-builder.Services.AddSingleton<IJobQueueService, RedisJobQueueService>();
-builder.Services.AddSingleton<IContainerPoolManager, ContainerPoolManager>();
+// Register services (SEM DOCKER)
+builder.Services.AddSingleton<InProcessCodeExecutor>();
 builder.Services.AddSingleton<ProhibitedCodeScanner>();
-builder.Services.AddSingleton<IDockerCodeExecutor, DockerCodeExecutor>();
-builder.Services.AddSingleton<IExecutionCacheService, ExecutionCacheService>();
-builder.Services.AddSingleton<ICodeCoverageService, CodeCoverageService>();
-builder.Services.AddHostedService<ContainerPoolMaintenanceService>();
 
 // Add health checks
 builder.Services.AddPlatformHealthChecks(builder.Configuration, "ExecutionService");
@@ -50,19 +33,11 @@ builder.Services.AddPlatformHealthChecks(builder.Configuration, "ExecutionServic
 var app = builder.Build();
 app.UseCors("AllowAll");
 
-// Initialize container pool warm pool
-var poolManager = app.Services.GetRequiredService<IContainerPoolManager>();
-var logger = app.Services.GetRequiredService<ILogger<Program>>();
-
-logger.LogInformation("Initializing container pool warm pool...");
-await poolManager.InitializeWarmPoolAsync();
-logger.LogInformation("Container pool warm pool initialized");
-
 // Add Prometheus metrics
 app.UsePrometheusMetrics();
 
-// Simple synchronous code execution
-app.MapPost("/api/code/execute", async (HttpContext context, SimpleCodeExecutor executor, ILogger<Program> logger) =>
+// Simple synchronous code execution (SEM DOCKER)
+app.MapPost("/api/code/execute", async (HttpContext context, InProcessCodeExecutor executor, ILogger<Program> logger) =>
 {
     var stopwatch = System.Diagnostics.Stopwatch.StartNew();
     
@@ -147,148 +122,187 @@ app.MapPost("/api/code/execute", async (HttpContext context, SimpleCodeExecutor 
 
 app.MapPlatformHealthChecks("/health");
 
-// Container pool statistics endpoint
-app.MapGet("/api/pool/stats", async (IContainerPoolManager poolManager) =>
-{
-    var stats = await poolManager.GetPoolStatsAsync();
-    return Results.Ok(stats);
-});
-
-// Docker execution endpoint with caching
-app.MapPost("/api/code/execute-docker", async (
-    HttpContext context,
-    IDockerCodeExecutor dockerExecutor,
-    IExecutionCacheService cacheService,
-    ILogger<Program> logger) =>
-{
-    try
-    {
-        using var reader = new StreamReader(context.Request.Body);
-        var body = await reader.ReadToEndAsync();
-        
-        var request = JsonSerializer.Deserialize<DockerExecuteRequest>(body, new JsonSerializerOptions 
-        { 
-            PropertyNameCaseInsensitive = true 
-        });
-
-        if (request == null || string.IsNullOrWhiteSpace(request.Code))
-        {
-            return Results.BadRequest(new { error = "Code is required" });
-        }
-
-        logger.LogInformation("Docker execution request: {CodeLength} characters, Session: {SessionId}",
-            request.Code.Length, request.SessionId ?? "none");
-
-        // Check cache first
-        var cachedResult = await cacheService.GetCachedResultAsync(request.Code);
-        if (cachedResult != null)
-        {
-            logger.LogInformation("Returning cached result for code hash");
-            return Results.Ok(cachedResult);
-        }
-
-        // Execute in Docker container
-        var result = await dockerExecutor.ExecuteAsync(
-            request.Code,
-            request.SessionId,
-            request.TimeoutSeconds ?? 60);
-
-        // Cache successful results
-        await cacheService.CacheResultAsync(request.Code, result);
-
-        return Results.Ok(result);
-    }
-    catch (Exception ex)
-    {
-        logger.LogError(ex, "Docker execution failed");
-        return Results.Json(new
-        {
-            jobId = Guid.NewGuid(),
-            status = "Failed",
-            error = $"Internal error: {ex.Message}"
-        }, statusCode: 500);
-    }
-});
-
-// Code coverage endpoint
-app.MapPost("/api/code/coverage", async (
-    HttpContext context,
-    ICodeCoverageService coverageService,
-    ILogger<Program> logger) =>
-{
-    try
-    {
-        using var reader = new StreamReader(context.Request.Body);
-        var body = await reader.ReadToEndAsync();
-        
-        var request = JsonSerializer.Deserialize<CoverageRequest>(body, new JsonSerializerOptions 
-        { 
-            PropertyNameCaseInsensitive = true 
-        });
-
-        if (request == null || string.IsNullOrWhiteSpace(request.Code))
-        {
-            return Results.BadRequest(new { error = "Code is required" });
-        }
-
-        logger.LogInformation("Coverage calculation request");
-
-        CodeCoverageResult result;
-        
-        if (!string.IsNullOrWhiteSpace(request.TestCode))
-        {
-            // Calculate actual coverage with tests
-            result = await coverageService.CalculateCoverageAsync(request.Code, request.TestCode);
-        }
-        else
-        {
-            // Estimate coverage without tests
-            result = await coverageService.EstimateCoverageAsync(request.Code);
-        }
-
-        return Results.Ok(result);
-    }
-    catch (Exception ex)
-    {
-        logger.LogError(ex, "Coverage calculation failed");
-        return Results.Json(new
-        {
-            success = false,
-            error = $"Internal error: {ex.Message}"
-        }, statusCode: 500);
-    }
-});
-
-// Cache statistics endpoint
-app.MapGet("/api/cache/stats", async (IExecutionCacheService cacheService) =>
-{
-    var stats = await cacheService.GetStatisticsAsync();
-    return Results.Ok(stats);
-});
-
-// Clear cache endpoint
-app.MapDelete("/api/cache/clear", async (IExecutionCacheService cacheService) =>
-{
-    await cacheService.ClearAllAsync();
-    return Results.Ok(new { message = "Cache cleared successfully" });
-});
-
 app.Run();
+
+// Executor de código sem Docker (in-process)
+public class InProcessCodeExecutor
+{
+    private readonly ILogger<InProcessCodeExecutor> _logger;
+    private readonly ProhibitedCodeScanner _scanner;
+
+    public InProcessCodeExecutor(ILogger<InProcessCodeExecutor> logger, ProhibitedCodeScanner scanner)
+    {
+        _logger = logger;
+        _scanner = scanner;
+    }
+
+    public async Task<ExecutionResult> ExecuteAsync(string code)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        
+        try
+        {
+            // Verificar código proibido
+            var scanResult = _scanner.ScanCode(code);
+            if (!scanResult.IsAllowed)
+            {
+                return new ExecutionResult
+                {
+                    Status = "Blocked",
+                    Error = $"Código contém operações proibidas: {string.Join(", ", scanResult.ViolatedRules)}",
+                    ExecutionTimeMs = (int)stopwatch.ElapsedMilliseconds
+                };
+            }
+
+            // Compilar código
+            var compilation = await CompileCodeAsync(code);
+            if (!compilation.Success)
+            {
+                return new ExecutionResult
+                {
+                    Status = "CompilationError",
+                    Error = compilation.Error,
+                    ExecutionTimeMs = (int)stopwatch.ElapsedMilliseconds
+                };
+            }
+
+            // Executar código
+            var output = await ExecuteCompiledCodeAsync(compilation.Assembly);
+            
+            stopwatch.Stop();
+            
+            return new ExecutionResult
+            {
+                Status = "Completed",
+                Output = output,
+                ExecutionTimeMs = (int)stopwatch.ElapsedMilliseconds
+            };
+        }
+        catch (Exception ex)
+        {
+            stopwatch.Stop();
+            _logger.LogError(ex, "Execution failed");
+            
+            return new ExecutionResult
+            {
+                Status = "RuntimeError",
+                Error = ex.Message,
+                ExecutionTimeMs = (int)stopwatch.ElapsedMilliseconds
+            };
+        }
+    }
+
+    private async Task<CompilationResult> CompileCodeAsync(string code)
+    {
+        try
+        {
+            // Adicionar using statements se não existirem
+            var fullCode = $@"
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+
+public class Program
+{{
+    public static void Main()
+    {{
+        {code}
+    }}
+}}";
+
+            var syntaxTree = CSharpSyntaxTree.ParseText(fullCode);
+            
+            var references = new[]
+            {
+                MetadataReference.CreateFromFile(typeof(object).Assembly.Location),
+                MetadataReference.CreateFromFile(typeof(Console).Assembly.Location),
+                MetadataReference.CreateFromFile(typeof(System.Runtime.AssemblyTargetedPatchBandAttribute).Assembly.Location),
+                MetadataReference.CreateFromFile(typeof(Microsoft.CSharp.RuntimeBinder.CSharpArgumentInfo).Assembly.Location),
+                MetadataReference.CreateFromFile(typeof(System.Linq.Enumerable).Assembly.Location)
+            };
+
+            var compilation = CSharpCompilation.Create(
+                "DynamicCode",
+                new[] { syntaxTree },
+                references,
+                new CSharpCompilationOptions(OutputKind.ConsoleApplication));
+
+            using var ms = new MemoryStream();
+            var result = compilation.Emit(ms);
+
+            if (!result.Success)
+            {
+                var errors = string.Join("\n", result.Diagnostics
+                    .Where(d => d.Severity == DiagnosticSeverity.Error)
+                    .Select(d => d.GetMessage()));
+
+                return new CompilationResult { Success = false, Error = errors };
+            }
+
+            ms.Seek(0, SeekOrigin.Begin);
+            var assembly = Assembly.Load(ms.ToArray());
+            
+            return new CompilationResult { Success = true, Assembly = assembly };
+        }
+        catch (Exception ex)
+        {
+            return new CompilationResult { Success = false, Error = ex.Message };
+        }
+    }
+
+    private async Task<string> ExecuteCompiledCodeAsync(Assembly assembly)
+    {
+        var output = new StringBuilder();
+        var originalOut = Console.Out;
+        
+        try
+        {
+            // Redirecionar Console.WriteLine para capturar output
+            using var writer = new StringWriter(output);
+            Console.SetOut(writer);
+            
+            // Executar com timeout
+            var task = Task.Run(() =>
+            {
+                var entryPoint = assembly.EntryPoint;
+                entryPoint?.Invoke(null, new object[] { new string[0] });
+            });
+
+            // Timeout de 10 segundos
+            if (await Task.WhenAny(task, Task.Delay(10000)) == task)
+            {
+                await task; // Aguardar conclusão
+                return output.ToString();
+            }
+            else
+            {
+                throw new TimeoutException("Código executou por mais de 10 segundos");
+            }
+        }
+        finally
+        {
+            Console.SetOut(originalOut);
+        }
+    }
+}
+
+public class CompilationResult
+{
+    public bool Success { get; set; }
+    public string Error { get; set; } = "";
+    public Assembly? Assembly { get; set; }
+}
 
 public class ExecuteRequest
 {
     public string Code { get; set; } = "";
 }
 
-public class DockerExecuteRequest
+public class ExecutionResult
 {
-    public string Code { get; set; } = "";
-    public string? SessionId { get; set; }
-    public int? TimeoutSeconds { get; set; }
-}
-
-public class CoverageRequest
-{
-    public string Code { get; set; } = "";
-    public string? TestCode { get; set; }
+    public string Status { get; set; } = "";
+    public string Output { get; set; } = "";
+    public string Error { get; set; } = "";
+    public int ExecutionTimeMs { get; set; }
 }
